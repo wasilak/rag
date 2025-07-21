@@ -3,10 +3,11 @@ import logging
 from typing import List, Dict, Any
 from datetime import datetime
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Horizontal
+from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
 from textual.widgets import Header, Footer, Input, Static, Button, Label, TextArea
 from textual.reactive import reactive
 from textual import work
+from textual.binding import Binding
 from rich.text import Text
 from rich.console import Console
 from rich.markdown import Markdown
@@ -46,14 +47,19 @@ class ChatMessage(Static):
         self.update(message_content)
 
 
-class ChatHistory(Vertical):
-    """Container for chat messages"""
+class ChatHistory(ScrollableContainer):
+    """Scrollable container for chat messages"""
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.can_focus = True  # Allow focus for scrolling
+        
     def add_message(self, content: str, is_user: bool = True, model_name: str = "") -> None:
         """Add a new message to the chat history"""
         message = ChatMessage(content, is_user, model_name)
         self.mount(message)
-        self.scroll_end()
+        # Schedule scroll to end after the message is rendered
+        self.call_after_refresh(self.scroll_end)
 
 class ChatApp(App):
     """Main chat application"""
@@ -61,8 +67,31 @@ class ChatApp(App):
     # Force dark mode and ensure proper rendering
     CSS_PATH = None  # Use inline CSS
     TITLE = "RAG Chat"
+    
+    # Add key bindings for scrolling
+    BINDINGS = [
+        Binding("up", "scroll_up", "Scroll up", show=False),
+        Binding("down", "scroll_down", "Scroll down", show=False), 
+        Binding("pageup", "page_up", "Page up", show=False),
+        Binding("pagedown", "page_down", "Page down", show=False),
+        Binding("home", "scroll_home", "Scroll to top", show=False),
+        Binding("end", "scroll_end", "Scroll to bottom", show=False),
+        Binding("ctrl+c", "exit", "Exit"),
+        Binding("ctrl+l", "clear_chat", "Clear chat"),
+        Binding("ctrl+i", "show_info", "Show info"),
+    ]
 
     CSS = """
+    #chat-history {
+        height: 1fr;
+        border: solid $accent;
+        padding: 1;
+        margin: 1;
+        scrollbar-size-horizontal: 1;
+        scrollbar-size-vertical: 1;
+        overflow-y: auto;
+    }
+
     #status {
         background: transparent;
         color: $text;
@@ -112,6 +141,36 @@ class ChatApp(App):
         self.llm_client = None
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
+
+    def action_scroll_up(self) -> None:
+        """Scroll chat history up"""
+        chat_history = self.query_one("#chat-history")
+        chat_history.scroll_up()
+
+    def action_scroll_down(self) -> None:
+        """Scroll chat history down"""
+        chat_history = self.query_one("#chat-history")
+        chat_history.scroll_down()
+
+    def action_page_up(self) -> None:
+        """Page up in chat history"""
+        chat_history = self.query_one("#chat-history")
+        chat_history.scroll_page_up()
+
+    def action_page_down(self) -> None:
+        """Page down in chat history"""
+        chat_history = self.query_one("#chat-history")
+        chat_history.scroll_page_down()
+
+    def action_scroll_home(self) -> None:
+        """Scroll to top of chat history"""
+        chat_history = self.query_one("#chat-history")
+        chat_history.scroll_home()
+
+    def action_scroll_end(self) -> None:
+        """Scroll to bottom of chat history"""
+        chat_history = self.query_one("#chat-history")
+        chat_history.scroll_end()
 
     def action_clear_chat(self) -> None:
         """Clear the chat history"""
@@ -175,9 +234,7 @@ class ChatApp(App):
 
         # Set text content after mounting
         self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
-        self.query_one("#input-label").update("Type your message below and press Ctrl+Enter to send")
-
-
+        self.query_one("#input-label").update("Type your message below and press Ctrl+Enter to send | Use ↑/↓ or PgUp/PgDn to scroll chat")
 
         # Focus on input field
         text_area = self.query_one("#message-input")
@@ -213,11 +270,14 @@ class ChatApp(App):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press"""
+        # Handle send button
         if event.button.id == "send-button":
             text_area = self.query_one("#message-input")
             message = text_area.text.strip()
             if message:
                 self._process_message(message)
+                # Consume this event
+                event.stop()
 
     def on_key(self, event) -> None:
         """Handle key events"""
@@ -233,6 +293,7 @@ class ChatApp(App):
                 self._process_message(message)
                 # Prevent the event from propagating to the TextArea
                 event.stop()
+        # Let other keys be handled by the bindings (up, down, pageup, pagedown, etc.)
 
     def _process_message(self, message: str) -> None:
         """Process a user message"""
