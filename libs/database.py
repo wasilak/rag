@@ -39,7 +39,7 @@ def load_documents(source_path, source_type, mode):
         md = MarkdownifyTransformer()
         documents = md.transform_documents(docs)
         logger.info(f"Transformed {len(documents)} documents from {source_path}")
-    
+
     return documents
 
 
@@ -100,11 +100,11 @@ def process_markdown_documents(chunks, mode, id_prefix):
     return documents, metadata, ids
 
 
-def bootstrap_db(client, collection, raw_documents, llm, embedding_model, mode, id_prefix):
+def bootstrap_db(client, collection, raw_documents, llm, embedding_model, embedding_llm, mode, id_prefix):
     """Bootstrap the database with documents"""
     logger.info(f"Bootstrapping collection '{collection}' with {len(raw_documents)} documents")
     logger.info(f"Using Ollama embedding model '{embedding_model}'")
-    embedding_function = set_embedding_function(llm, embedding_model)
+    embedding_function = set_embedding_function(embedding_llm, embedding_model)
 
     try:
         logger.info(f"Creating/getting collection {collection} with Ollama embedding function...")
@@ -138,20 +138,20 @@ def bootstrap_db(client, collection, raw_documents, llm, embedding_model, mode, 
     logger.info(f"Upserted {len(documents)} documents into collection '{collection}'")
 
 
-def process_data_fill(client, collection, source_paths, source_type, mode, cleanup, llm, embedding_model):
+def process_data_fill(client, collection, source_paths, source_type, mode, cleanup, llm, embedding_model, embedding_llm):
     """Process data fill operation for multiple sources"""
     logger.info(f"Filling collection '{collection}' with data from {source_paths}")
-    
+
     if cleanup:
         delete_collection(client, collection)
 
     for source_path in source_paths:
         id_prefix = hashlib.sha256(source_path.encode()).hexdigest()[:20]
         logger.info(f"Processing {source_path} with id prefix {id_prefix}")
-        
-        documents = load_documents(source_path, source_type, mode)
-        
-        logger.info(f"Bootstrapping collection '{collection}' with {len(documents)} documents")
-        bootstrap_db(client, collection, documents, llm, embedding_model, mode, id_prefix)
 
-    logger.info(f"Collection '{collection}' has been created and filled with data.") 
+        documents = load_documents(source_path, source_type, mode)
+
+        logger.info(f"Bootstrapping collection '{collection}' with {len(documents)} documents")
+        bootstrap_db(client, collection, documents, llm, embedding_model, embedding_llm, mode, id_prefix)
+
+    logger.info(f"Collection '{collection}' has been created and filled with data.")

@@ -101,13 +101,14 @@ class ChatApp(App):
     }
     """
 
-    def __init__(self, client, collection_name: str, llm: str, model: str, embedding_model: str):
+    def __init__(self, client, collection_name: str, llm: str, model: str, embedding_model: str, embedding_llm: str):
         super().__init__()
         self.client = client
         self.collection_name = collection_name
         self.llm = llm
         self.model = model
         self.embedding_model = embedding_model
+        self.embedding_llm = embedding_llm
         self.llm_client = None
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
@@ -170,7 +171,7 @@ class ChatApp(App):
         self.theme = "tokyo-night"
 
         self.llm_client = self._create_llm_client()
-        self.embedding_function = set_embedding_function(self.llm, self.embedding_model)
+        self.embedding_function = set_embedding_function(self.embedding_llm, self.embedding_model)
 
         # Set text content after mounting
         self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
@@ -361,11 +362,11 @@ class ChatApp(App):
         self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
 
 
-def process_chat(client, collection, llm, model, embedding_model):
+def process_chat(client, collection, llm, model, embedding_model, embedding_llm):
     """Process chat operation"""
     logger.info(f"Starting chat interface for collection '{collection}'")
 
-    app = ChatApp(client, collection, llm, model, embedding_model)
+    app = ChatApp(client, collection, llm, model, embedding_model, embedding_llm)
     app.run()
 
     logger.info(f"Chat session ended")

@@ -26,7 +26,8 @@ def main():
             mode=args.mode,
             cleanup=args.cleanup,
             llm=args.llm,
-            embedding_model=args.embedding_model
+            embedding_model=args.embedding_model,
+            embedding_llm=args.embedding_llm,
         )
 
     elif args.subparser == "search":
@@ -47,7 +48,8 @@ def main():
             collection=args.collection,
             llm=args.llm,
             model=args.model,
-            embedding_model=args.embedding_model
+            embedding_model=args.embedding_model,
+            embedding_llm=args.embedding_llm,
         )
 
 
