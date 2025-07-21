@@ -3,15 +3,10 @@ import logging
 from typing import List, Dict, Any
 from datetime import datetime
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Horizontal, ScrollableContainer
-from textual.widgets import Header, Footer, Input, Static, Button, Label, TextArea
-from textual.reactive import reactive
+from textual.containers import Horizontal, ScrollableContainer
+from textual.widgets import Header, Footer, Static, Button, Label, TextArea
 from textual import work
 from textual.binding import Binding
-from rich.text import Text
-from rich.console import Console
-from rich.markdown import Markdown
-from rich.panel import Panel
 from openai import OpenAI
 from .embedding import set_embedding_function
 from .utils import format_footnotes
@@ -53,7 +48,7 @@ class ChatHistory(ScrollableContainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.can_focus = True  # Allow focus for scrolling
-        
+
     def add_message(self, content: str, is_user: bool = True, model_name: str = "") -> None:
         """Add a new message to the chat history"""
         message = ChatMessage(content, is_user, model_name)
@@ -61,17 +56,18 @@ class ChatHistory(ScrollableContainer):
         # Schedule scroll to end after the message is rendered
         self.call_after_refresh(self.scroll_end)
 
+
 class ChatApp(App):
     """Main chat application"""
 
     # Force dark mode and ensure proper rendering
     CSS_PATH = None  # Use inline CSS
     TITLE = "RAG Chat"
-    
+
     # Add key bindings for scrolling
     BINDINGS = [
         Binding("up", "scroll_up", "Scroll up", show=False),
-        Binding("down", "scroll_down", "Scroll down", show=False), 
+        Binding("down", "scroll_down", "Scroll down", show=False),
         Binding("pageup", "page_up", "Page up", show=False),
         Binding("pagedown", "page_down", "Page down", show=False),
         Binding("home", "scroll_home", "Scroll to top", show=False),
@@ -125,7 +121,6 @@ class ChatApp(App):
     }
 
     .auto-grow {
-        min-height: 3;
         max-height: 10;
     }
     """
@@ -243,30 +238,29 @@ class ChatApp(App):
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
         if self.llm == "ollama":
-            logger.info(f"Using Ollama as LLM")
+            logger.info("Using Ollama as LLM")
             return OpenAI(
                 base_url='http://localhost:11434/v1',
                 api_key='ollama',  # required, but unused
             )
         elif self.llm == "gemini":
-            logger.info(f"Using Gemini as LLM")
+            logger.info("Using Gemini as LLM")
             return OpenAI(
                 api_key=os.getenv("GEMINI_API_KEY"),
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
             )
         else:
-            logger.info(f"Using OpenAI as LLM")
+            logger.info("Using OpenAI as LLM")
             return OpenAI()
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Handle text area changes for auto-growing"""
-        # Auto-grow the text area based on content
+        # Simple auto-grow - just cap the maximum height, let Textual handle the rest
         text_area = event.text_area
-        lines = len(text_area.text.split('\n'))
-        new_height = max(3, min(lines + 1, 10))  # Min 3, max 10 lines
-        text_area.styles.height = new_height
-
-
+        if text_area.id == "message-input":
+            lines = len(text_area.text.split('\n'))
+            if lines > 10:
+                text_area.styles.height = 10
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press"""
@@ -297,10 +291,9 @@ class ChatApp(App):
 
     def _process_message(self, message: str) -> None:
         """Process a user message"""
-        # Clear input
+        # Clear input and let Textual handle sizing naturally
         text_area = self.query_one("#message-input")
         text_area.text = ""
-        text_area.styles.height = 3  # Reset height
 
         # Add user message to chat
         chat_history = self.query_one("#chat-history")
@@ -425,9 +418,13 @@ class ChatApp(App):
 
 def process_chat(client, collection, llm, model, embedding_model, embedding_llm):
     """Process chat operation"""
+    # Disable logging during chat to prevent UI interference
+    logging.getLogger().handlers.clear()
+    logging.getLogger().setLevel(logging.CRITICAL)
+
     logger.info(f"Starting chat interface for collection '{collection}'")
 
     app = ChatApp(client, collection, llm, model, embedding_model, embedding_llm)
     app.run()
 
-    logger.info(f"Chat session ended")
+    logger.info("Chat session ended")
