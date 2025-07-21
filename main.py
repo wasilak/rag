@@ -15,6 +15,10 @@ def main():
 
     logging.basicConfig(level=args.log_level)
 
+    # Suppress noisy HTTP and library logs
+    for noisy_logger in ["httpx", "urllib3", "chromadb", "openai", "httpcore"]:
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
     client = chromadb.PersistentClient(path=args.db_path, settings=Settings(anonymized_telemetry=False))
 
     if args.subparser == "data-fill":

@@ -238,19 +238,19 @@ class ChatApp(App):
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
         if self.llm == "ollama":
-            logger.info("Using Ollama as LLM")
+            logger.debug("Using Ollama as LLM")
             return OpenAI(
                 base_url='http://localhost:11434/v1',
                 api_key='ollama',  # required, but unused
             )
         elif self.llm == "gemini":
-            logger.info("Using Gemini as LLM")
+            logger.debug("Using Gemini as LLM")
             return OpenAI(
                 api_key=os.getenv("GEMINI_API_KEY"),
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
             )
         else:
-            logger.info("Using OpenAI as LLM")
+            logger.debug("Using OpenAI as LLM")
             return OpenAI()
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
@@ -422,9 +422,9 @@ def process_chat(client, collection, llm, model, embedding_model, embedding_llm)
     logging.getLogger().handlers.clear()
     logging.getLogger().setLevel(logging.CRITICAL)
 
-    logger.info(f"Starting chat interface for collection '{collection}'")
+    logger.debug(f"Starting chat interface for collection '{collection}'")
 
     app = ChatApp(client, collection, llm, model, embedding_model, embedding_llm)
     app.run()
 
-    logger.info("Chat session ended")
+    logger.debug("Chat session ended")

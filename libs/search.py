@@ -10,19 +10,19 @@ logger = logging.getLogger("RAG")
 def create_llm_client(llm):
     """Create LLM client based on the provider"""
     if llm == "ollama":
-        logger.info(f"Using Ollama as LLM")
+        logger.debug(f"Using Ollama as LLM")
         return OpenAI(
             base_url='http://localhost:11434/v1',
             api_key='ollama',  # required, but unused
         )
     elif llm == "gemini":
-        logger.info(f"Using Gemini as LLM")
+        logger.debug(f"Using Gemini as LLM")
         return OpenAI(
             api_key=os.getenv("GEMINI_API_KEY"),
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
         )
     else:
-        logger.info(f"Using OpenAI as LLM")
+        logger.debug(f"Using OpenAI as LLM")
         return OpenAI()
 
 
@@ -90,7 +90,8 @@ def search(client_llm, model, client, collection_name, query, dry_run, embedding
     system_prompt += f"Footnotes:\n{footnotes}\n"
 
     # print(system_prompt)
-    print_fancy_markdown(system_prompt, "📝 System Prompt", border_style="blue")
+    if logger.isEnabledFor(logging.DEBUG):
+      print_fancy_markdown(system_prompt, "📝 System Prompt", border_style="blue")
 
     if dry_run:
         exit(0)
@@ -113,10 +114,10 @@ def search(client_llm, model, client, collection_name, query, dry_run, embedding
 
 def process_search(client, collection, query, llm, model, dry_run, embedding_model, embedding_llm):
     """Process search operation"""
-    logger.info(f"Searching collection '{collection}' with query '{query}'")
+    logger.debug(f"Searching collection '{collection}' with query '{query}'")
 
     client_llm = create_llm_client(llm)
     embedding_function = set_embedding_function(embedding_llm, embedding_model)
 
     search(client_llm, model, client, collection, query, dry_run, embedding_function)
-    logger.info("Search completed")
+    logger.debug("Search completed")
