@@ -37,7 +37,8 @@ def main():
             llm=args.llm,
             model=args.model,
             dry_run=args.dry_run,
-            embedding_model=args.embedding_model
+            embedding_model=args.embedding_model,
+            embedding_llm=args.embedding_llm
         )
 
     elif args.subparser == "chat":

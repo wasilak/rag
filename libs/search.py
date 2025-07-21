@@ -111,12 +111,12 @@ def search(client_llm, model, client, collection_name, query, dry_run, embedding
         print(response)
 
 
-def process_search(client, collection, query, llm, model, dry_run, embedding_model):
+def process_search(client, collection, query, llm, model, dry_run, embedding_model, embedding_llm):
     """Process search operation"""
     logger.info(f"Searching collection '{collection}' with query '{query}'")
-    
+
     client_llm = create_llm_client(llm)
-    embedding_function = set_embedding_function(llm, embedding_model)
-    
+    embedding_function = set_embedding_function(embedding_llm, embedding_model)
+
     search(client_llm, model, client, collection, query, dry_run, embedding_function)
-    logger.info(f"Search completed") 
+    logger.info("Search completed")

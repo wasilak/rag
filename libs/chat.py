@@ -20,26 +20,26 @@ logger = logging.getLogger("RAG")
 
 class ChatMessage(Static):
     """A widget to display a chat message"""
-    
+
     def __init__(self, content: str, is_user: bool = True, model_name: str = "", **kwargs):
         super().__init__(**kwargs)
         self.content = content
         self.is_user = is_user
         self.model_name = model_name
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
+
         # Add CSS class based on message type
         if self.is_user:
             self.add_class("user-message")
         else:
             self.add_class("bot-message")
-        
+
     def on_mount(self) -> None:
         """Set up the message display"""
         # Create header with timestamp
         user_info = "User" if self.is_user else f"Bot ({self.model_name})" if self.model_name else "Bot"
         header = f"[{self.timestamp}] {user_info}"
-        
+
         # For now, just display the content as plain text to avoid formatting issues
         # TODO: Implement better Rich formatting that works in terminal
         message_content = f"{header}\n\n{self.content}"
@@ -48,24 +48,20 @@ class ChatMessage(Static):
 
 class ChatHistory(Vertical):
     """Container for chat messages"""
-    
+
     def add_message(self, content: str, is_user: bool = True, model_name: str = "") -> None:
         """Add a new message to the chat history"""
         message = ChatMessage(content, is_user, model_name)
         self.mount(message)
         self.scroll_end()
 
-
-
-
-
 class ChatApp(App):
     """Main chat application"""
-    
+
     # Force dark mode and ensure proper rendering
     CSS_PATH = None  # Use inline CSS
     TITLE = "RAG Chat"
-    
+
     CSS = """
     #status {
         background: transparent;
@@ -75,36 +71,36 @@ class ChatApp(App):
         border: solid $accent;
         text-align: center;
     }
-    
+
     ChatMessage {
         margin: 1;
         padding: 1;
     }
-    
+
     .user-message {
         background: transparent;
         border: dashed $primary-lighten-1;
         color: $text;
     }
-    
+
     .bot-message {
         background: $surface;
         border: dashed $secondary;
         color: $text;
     }
-    
+
     #input-label {
         color: $text;
         text-align: center;
         margin: 1;
     }
-    
+
     .auto-grow {
         min-height: 3;
         max-height: 10;
     }
     """
-    
+
     def __init__(self, client, collection_name: str, llm: str, model: str, embedding_model: str):
         super().__init__()
         self.client = client
@@ -115,33 +111,33 @@ class ChatApp(App):
         self.llm_client = None
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
-        
+
     def action_clear_chat(self) -> None:
         """Clear the chat history"""
         chat_history = self.query_one("#chat-history")
         chat_history.remove_children()
         self.conversation_history.clear()
         self.query_one("#status").update(f"Chat cleared. Ready to chat with {self.model}!")
-        
+
     def action_show_info(self) -> None:
         """Show chat information"""
         info = f"Model: {self.model}\nLLM: {self.llm}\nCollection: {self.collection_name}\nMessages: {len(self.conversation_history)}"
         self.notify(info, title="Chat Info")
-        
+
     def action_exit_chat(self) -> None:
         """Exit the chat application"""
         self.exit()
-        
+
     def action_tokyo_night(self) -> None:
         """Switch to Tokyo Night theme"""
         self.dark = True
         self.notify("Switched to Tokyo Night theme", title="Theme Changed")
-        
+
     def action_light_theme(self) -> None:
         """Switch to light theme"""
         self.dark = False
         self.notify("Switched to light theme", title="Theme Changed")
-        
+
     def action_switch_theme(self, theme_name: str) -> None:
         """Switch to a specific theme"""
         if theme_name.lower() in ["dark", "tokyo", "tokyo-night"]:
@@ -150,13 +146,13 @@ class ChatApp(App):
         elif theme_name.lower() in ["light", "default"]:
             self.dark = False
             self.notify(f"Switched to {theme_name} theme", title="Theme Changed")
-            
+
     def action_list_themes(self) -> None:
         """List available themes"""
         themes = ["dark", "light", "default"]
         theme_list = "\n".join(themes)
         self.notify(f"Available themes:\n{theme_list}", title="Available Themes")
-        
+
     def compose(self) -> ComposeResult:
         """Create child widgets for the app"""
         yield Header()
@@ -167,25 +163,25 @@ class ChatApp(App):
             yield TextArea(id="message-input", classes="auto-grow")
             yield Button("Send", id="send-button")
         yield Footer()
-        
+
     def on_mount(self) -> None:
         """Set up the application when it starts"""
         # Set Tokyo Night theme as default
         self.theme = "tokyo-night"
-        
+
         self.llm_client = self._create_llm_client()
         self.embedding_function = set_embedding_function(self.llm, self.embedding_model)
-        
+
         # Set text content after mounting
         self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
         self.query_one("#input-label").update("Type your message below and press Ctrl+Enter to send")
-        
 
-        
+
+
         # Focus on input field
         text_area = self.query_one("#message-input")
         text_area.focus()
-        
+
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
         if self.llm == "ollama":
@@ -203,7 +199,7 @@ class ChatApp(App):
         else:
             logger.info(f"Using OpenAI as LLM")
             return OpenAI()
-            
+
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Handle text area changes for auto-growing"""
         # Auto-grow the text area based on content
@@ -211,9 +207,9 @@ class ChatApp(App):
         lines = len(text_area.text.split('\n'))
         new_height = max(3, min(lines + 1, 10))  # Min 3, max 10 lines
         text_area.styles.height = new_height
-        
 
-        
+
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press"""
         if event.button.id == "send-button":
@@ -221,7 +217,7 @@ class ChatApp(App):
             message = text_area.text.strip()
             if message:
                 self._process_message(message)
-                
+
     def on_key(self, event) -> None:
         """Handle key events"""
         if event.key == "ctrl+c":
@@ -236,70 +232,70 @@ class ChatApp(App):
                 self._process_message(message)
                 # Prevent the event from propagating to the TextArea
                 event.stop()
-                
+
     def _process_message(self, message: str) -> None:
         """Process a user message"""
         # Clear input
         text_area = self.query_one("#message-input")
         text_area.text = ""
         text_area.styles.height = 3  # Reset height
-        
+
         # Add user message to chat
         chat_history = self.query_one("#chat-history")
         chat_history.add_message(message, is_user=True)
-        
+
         # Update status
         self.query_one("#status").update(f"🤔 Thinking with {self.model}...")
-        
+
         # Process the message asynchronously
         self._generate_response(message)
-        
+
     @work(thread=True)
     def _generate_response(self, user_message: str) -> None:
         """Generate response using RAG"""
         try:
             # Add to conversation history
             self.conversation_history.append({"role": "user", "content": user_message})
-            
+
             # Search for relevant documents
             collection = self.client.get_or_create_collection(
-                name=self.collection_name, 
+                name=self.collection_name,
                 embedding_function=self.embedding_function
             )
-            
+
             results = collection.query(
                 query_texts=[user_message],
                 n_results=4
             )
-            
+
             # Build system prompt with context
             system_prompt = self._build_system_prompt(results)
-            
+
             # Prepare messages for LLM
             messages = [{"role": "system", "content": system_prompt}]
             messages.extend(self.conversation_history)
-            
+
             # Generate response
             response = self.llm_client.chat.completions.create(
                 model=self.model,
                 messages=messages
             )
-            
+
             if response.choices:
                 assistant_message = response.choices[0].message.content
-                
+
                 # Add to conversation history
                 self.conversation_history.append({"role": "assistant", "content": assistant_message})
-                
+
                 # Update UI in main thread
                 self.call_from_thread(self._update_chat_with_response, assistant_message)
             else:
                 self.call_from_thread(self._update_chat_with_response, "Sorry, I couldn't generate a response.")
-                
+
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             self.call_from_thread(self._update_chat_with_response, f"Error: {str(e)}")
-            
+
     def _build_system_prompt(self, results: Dict[str, Any]) -> str:
         """Build system prompt with document context"""
         system_prompt = """
@@ -355,9 +351,9 @@ class ChatApp(App):
         # Format footnotes from metadata
         footnotes = format_footnotes(footnotes_metadata)
         system_prompt += f"Footnotes:\n{footnotes}\n"
-        
+
         return system_prompt
-        
+
     def _update_chat_with_response(self, response: str) -> None:
         """Update chat with assistant response"""
         chat_history = self.query_one("#chat-history")
@@ -368,8 +364,8 @@ class ChatApp(App):
 def process_chat(client, collection, llm, model, embedding_model):
     """Process chat operation"""
     logger.info(f"Starting chat interface for collection '{collection}'")
-    
+
     app = ChatApp(client, collection, llm, model, embedding_model)
     app.run()
-    
-    logger.info(f"Chat session ended") 
+
+    logger.info(f"Chat session ended")
