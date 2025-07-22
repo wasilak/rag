@@ -17,5 +17,6 @@ dependencies = [
     "openai>=1.97.0",
     "rich>=14.0.0",
     "textual>=0.55.0",
+    "tiktoken>=0.7.0",
     "unstructured[md]>=0.18.9",
 ]

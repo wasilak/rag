@@ -8,6 +8,7 @@ from textual.widgets import Header, Footer, Static, Button, Label, TextArea
 from textual import work
 from textual.binding import Binding
 from openai import OpenAI
+import tiktoken
 from .embedding import set_embedding_function
 from .utils import format_footnotes
 
@@ -33,11 +34,10 @@ class ChatMessage(Static):
     def on_mount(self) -> None:
         """Set up the message display"""
         # Create header with timestamp
-        user_info = "User" if self.is_user else f"Bot ({self.model_name})" if self.model_name else "Bot"
+        user_info = "👤 User" if self.is_user else f"🤖 {self.model_name}" if self.model_name else "🤖 Bot"
         header = f"[{self.timestamp}] {user_info}"
 
-        # For now, just display the content as plain text to avoid formatting issues
-        # TODO: Implement better Rich formatting that works in terminal
+        # Format the message content
         message_content = f"{header}\n\n{self.content}"
         self.update(message_content)
 
@@ -80,7 +80,7 @@ class ChatApp(App):
     CSS = """
     #chat-history {
         height: 1fr;
-        border: solid $accent;
+        border: solid #7aa2f7;
         padding: 1;
         margin: 1;
         scrollbar-size-horizontal: 1;
@@ -88,13 +88,27 @@ class ChatApp(App):
         overflow-y: auto;
     }
 
+    #chat-history:focus {
+        border: solid #bb9af7;
+        background: $surface-lighten-1;
+    }
+
     #status {
         background: transparent;
         color: $text;
         padding: 0 1;
         margin: 1;
-        border: solid $accent;
+        border: solid #7aa2f7;
         text-align: center;
+    }
+
+    #token-info {
+        background: transparent;
+        color: $text-muted;
+        padding: 0 1;
+        margin: 0 1;
+        text-align: center;
+        height: 1;
     }
 
     ChatMessage {
@@ -104,24 +118,35 @@ class ChatApp(App):
 
     .user-message {
         background: transparent;
-        border: dashed $primary-lighten-1;
+        border: dashed #7aa2f7;
         color: $text;
     }
 
     .bot-message {
         background: $surface;
-        border: dashed $secondary;
+        border: dashed #7aa2f7;
         color: $text;
     }
 
-    #input-label {
-        color: $text;
-        text-align: center;
-        margin: 1;
+    #input-container {
+        height: 10;
+        border-top: solid #7aa2f7;
+        padding: 0 1;
+        background: $surface;
+        margin-bottom: 2;
     }
 
-    .auto-grow {
-        max-height: 10;
+    #message-input {
+        height: 8;
+        min-height: 8;
+        max-height: 8;
+    }
+
+    #send-button {
+        height: 8;
+        min-height: 8;
+        max-height: 8;
+        margin-left: 1;
     }
     """
 
@@ -136,6 +161,8 @@ class ChatApp(App):
         self.llm_client = None
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
+        self.tokenizer = self._get_tokenizer()
+        self.total_tokens_used = 0
 
     def action_scroll_up(self) -> None:
         """Scroll chat history up"""
@@ -172,11 +199,14 @@ class ChatApp(App):
         chat_history = self.query_one("#chat-history")
         chat_history.remove_children()
         self.conversation_history.clear()
+        self.total_tokens_used = 0
+        self._update_token_display()
         self.query_one("#status").update(f"Chat cleared. Ready to chat with {self.model}!")
 
     def action_show_info(self) -> None:
         """Show chat information"""
-        info = f"Model: {self.model}\nLLM: {self.llm}\nCollection: {self.collection_name}\nMessages: {len(self.conversation_history)}"
+        token_counts = self._count_conversation_tokens()
+        info = f"Model: {self.model}\nLLM: {self.llm}\nCollection: {self.collection_name}\nMessages: {len(self.conversation_history)}\n\nToken Usage:\nTotal: {token_counts['total']}\nUser: {token_counts['user']}\nAssistant: {token_counts['assistant']}"
         self.notify(info, title="Chat Info")
 
     def action_exit_chat(self) -> None:
@@ -213,9 +243,9 @@ class ChatApp(App):
         yield Header()
         yield Label("", id="status")
         yield ChatHistory(id="chat-history")
-        yield Label("", id="input-label")
-        with Horizontal():
-            yield TextArea(id="message-input", classes="auto-grow")
+        yield Label("", id="token-info")
+        with Horizontal(id="input-container"):
+            yield TextArea(id="message-input")
             yield Button("Send", id="send-button")
         yield Footer()
 
@@ -229,11 +259,61 @@ class ChatApp(App):
 
         # Set text content after mounting
         self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
-        self.query_one("#input-label").update("Type your message below and press Ctrl+Enter to send | Use ↑/↓ or PgUp/PgDn to scroll chat")
+        
+        # Initialize token display
+        self._update_token_display()
 
         # Focus on input field
         text_area = self.query_one("#message-input")
         text_area.focus()
+
+    def _get_tokenizer(self):
+        """Get appropriate tokenizer for the model"""
+        try:
+            if self.model.startswith("gpt-"):
+                return tiktoken.encoding_for_model(self.model)
+            elif self.model.startswith("claude-"):
+                return tiktoken.get_encoding("cl100k_base")  # Claude uses cl100k_base
+            else:
+                # Default to GPT-4 tokenizer for other models
+                return tiktoken.encoding_for_model("gpt-4")
+        except Exception:
+            # Fallback to GPT-4 tokenizer
+            return tiktoken.encoding_for_model("gpt-4")
+
+    def _count_tokens(self, text: str) -> int:
+        """Count tokens in text"""
+        try:
+            return len(self.tokenizer.encode(text))
+        except Exception:
+            # Fallback: rough estimation (1 token ≈ 4 characters)
+            return len(text) // 4
+
+    def _count_conversation_tokens(self) -> Dict[str, int]:
+        """Count tokens in current conversation"""
+        total_tokens = 0
+        user_tokens = 0
+        assistant_tokens = 0
+        
+        for message in self.conversation_history:
+            tokens = self._count_tokens(message["content"])
+            total_tokens += tokens
+            if message["role"] == "user":
+                user_tokens += tokens
+            else:
+                assistant_tokens += tokens
+        
+        return {
+            "total": total_tokens,
+            "user": user_tokens,
+            "assistant": assistant_tokens
+        }
+
+    def _update_token_display(self):
+        """Update the token info display"""
+        token_counts = self._count_conversation_tokens()
+        token_info = f"💬 Messages: {len(self.conversation_history)} | 🎯 Total Tokens: {token_counts['total']} | 👤 User: {token_counts['user']} | 🤖 Assistant: {token_counts['assistant']}"
+        self.query_one("#token-info").update(token_info)
 
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
@@ -254,13 +334,9 @@ class ChatApp(App):
             return OpenAI()
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
-        """Handle text area changes for auto-growing"""
-        # Simple auto-grow - just cap the maximum height, let Textual handle the rest
-        text_area = event.text_area
-        if text_area.id == "message-input":
-            lines = len(text_area.text.split('\n'))
-            if lines > 10:
-                text_area.styles.height = 10
+        """Handle text area changes"""
+        # Keep fixed height for input area
+        pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press"""
@@ -291,13 +367,16 @@ class ChatApp(App):
 
     def _process_message(self, message: str) -> None:
         """Process a user message"""
-        # Clear input and let Textual handle sizing naturally
+        # Clear input
         text_area = self.query_one("#message-input")
         text_area.text = ""
 
         # Add user message to chat
         chat_history = self.query_one("#chat-history")
         chat_history.add_message(message, is_user=True)
+
+        # Update token display
+        self._update_token_display()
 
         # Update status
         self.query_one("#status").update(f"🤔 Thinking with {self.model}...")
@@ -413,6 +492,10 @@ class ChatApp(App):
         """Update chat with assistant response"""
         chat_history = self.query_one("#chat-history")
         chat_history.add_message(response, is_user=False, model_name=self.model)
+        
+        # Update token display
+        self._update_token_display()
+        
         self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
 
 
