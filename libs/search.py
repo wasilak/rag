@@ -1,39 +1,41 @@
 import os
 import logging
+from chromadb.api import ClientAPI
 from openai import OpenAI
 from .embedding import set_embedding_function
 from .utils import format_footnotes, print_fancy_markdown
+from .database import search as db_search
+from .models import get_best_model
 
 logger = logging.getLogger("RAG")
 
 
-def create_llm_client(llm):
+def create_llm_client(llm: str) -> OpenAI:
     """Create LLM client based on the provider"""
     if llm == "ollama":
-        logger.debug(f"Using Ollama as LLM")
+        logger.debug("Using Ollama as LLM")
         return OpenAI(
             base_url='http://localhost:11434/v1',
             api_key='ollama',  # required, but unused
         )
     elif llm == "gemini":
-        logger.debug(f"Using Gemini as LLM")
+        logger.debug("Using Gemini as LLM")
         return OpenAI(
             api_key=os.getenv("GEMINI_API_KEY"),
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
         )
     else:
-        logger.debug(f"Using OpenAI as LLM")
+        logger.debug("Using OpenAI as LLM")
         return OpenAI()
 
 
-def search(client_llm, model, client, collection_name, query, dry_run, embedding_function):
-    """Search for documents in the collection and generate response"""
-    collection = client.get_or_create_collection(name=collection_name, embedding_function=embedding_function)
+def search(client_llm: OpenAI, model: str, client, collection_name: str, query: str, dry_run: bool, embedding_function) -> None:
 
-    # https://docs.trychroma.com/docs/overview/getting-started
-    results = collection.query(
-        query_texts=[query],  # Chroma will embed this for you
-        n_results=4  # how many results to return
+    results = db_search(
+        client=client,
+        collection_name=collection_name,
+        query=query,
+        embedding_function=embedding_function,
     )
 
     system_prompt = """
@@ -78,12 +80,14 @@ def search(client_llm, model, client, collection_name, query, dry_run, embedding
 
     footnotes_metadata = []
 
-    for i, item in enumerate(results["documents"][0]):
-        metadata_entry = results["metadatas"][0][i]
-        footnotes_metadata.append(metadata_entry)
+    # Check if documents and metadatas are not None
+    if results["documents"] is not None and results["metadatas"] is not None:
+        for i, item in enumerate(results["documents"][0]):
+            metadata_entry = results["metadatas"][0][i]
+            footnotes_metadata.append(metadata_entry)
 
-        system_prompt += f"{i + 1}. \"{item}\"\n"
-        system_prompt += f"metadata: {metadata_entry}\n\n"
+            system_prompt += f"{i + 1}. \"{item}\"\n"
+            system_prompt += f"metadata: {metadata_entry}\n\n"
 
     # Format footnotes from metadata
     footnotes = format_footnotes(footnotes_metadata)
@@ -105,19 +109,22 @@ def search(client_llm, model, client, collection_name, query, dry_run, embedding
     )
 
     if len(response.choices) > 0:
-        # print(response.choices[0].message.content)
-        print_fancy_markdown(response.choices[0].message.content, "📝 Agent Reply")
+        markdown_content = response.choices[0].message.content if response.choices[0].message.content else "No content returned"
+        print_fancy_markdown(markdown_content, "📝 Agent Reply")
     else:
         print("No response from OpenAI API")
         print(response)
 
 
-def process_search(client, collection, query, llm, model, dry_run, embedding_model, embedding_llm):
+def process_search(client: ClientAPI, collection: str, query: str, llm: str, model: str, dry_run: bool, embedding_model: str, embedding_llm: str) -> None:
     """Process search operation"""
     logger.debug(f"Searching collection '{collection}' with query '{query}'")
+
+    # Validate and get best available model
+    validated_model = get_best_model(llm, model, "chat")
 
     client_llm = create_llm_client(llm)
     embedding_function = set_embedding_function(embedding_llm, embedding_model)
 
-    search(client_llm, model, client, collection, query, dry_run, embedding_function)
+    search(client_llm, validated_model, client, collection, query, dry_run, embedding_function)
     logger.debug("Search completed")

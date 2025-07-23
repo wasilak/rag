@@ -7,7 +7,7 @@ def get_env_default(env_var, default=None):
     return os.getenv(env_var, default)
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments with environment variable support
 
     Environment Variables:
@@ -69,7 +69,7 @@ def parse_arguments():
     search_parser = subparsers.add_parser("search", help="Search for documents in the collection", parents=[parent_parser])
     search_parser.add_argument("query", type=str, help="Query text to search for in the collection")
     search_parser.add_argument("--model", type=str,
-                             default=get_env_default("RAG_MODEL", "qwen3:8b"),
+                             default=get_env_default("RAG_MODEL", "qwen2.5:14b"),
                              help="Model to use for the LLM (env: RAG_MODEL)")
     # model="gpt-4o",
     # model="qwen3:8b",
@@ -80,7 +80,13 @@ def parse_arguments():
     # chat subcommand
     chat_parser = subparsers.add_parser("chat", help="Interactive chat with documents", parents=[parent_parser])
     chat_parser.add_argument("--model", type=str,
-                           default=get_env_default("RAG_MODEL", "qwen3:8b"),
+                           default=get_env_default("RAG_MODEL", "qwen2.5:14b"),
                            help="Model to use for the LLM (env: RAG_MODEL)")
+
+    # list-models subcommand
+    list_models_parser = subparsers.add_parser("list-models", help="List available models for a specific LLM provider")
+    list_models_parser.add_argument("provider", type=str,
+                                  choices=["openai", "ollama", "gemini"],
+                                  help="LLM provider to list models for")
 
     return parser.parse_args()

@@ -1,29 +1,36 @@
 import os
 import logging
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction, GoogleGenerativeAiEmbeddingFunction, OpenAIEmbeddingFunction
+from chromadb.api.types import EmbeddingFunction
+from .models import get_best_model
 
 logger = logging.getLogger("RAG")
 
 
-def set_embedding_function(function_provider, model):
+def set_embedding_function(function_provider: str, model: str) -> EmbeddingFunction:
     """Set up the appropriate embedding function based on the LLM provider"""
     logger.debug("Setting embedding function")
+
+    # Get validated embedding model
+    validated_model = get_best_model(function_provider, model, "embedding")
+
     if function_provider == "ollama":
-        logger.debug(f"Using Ollama embedding model '{model}'")
+        logger.debug(f"Using Ollama embedding model '{validated_model}'")
         return OllamaEmbeddingFunction(
             url="http://localhost:11434",
-            model_name=model,
+            model_name=validated_model,
         )
     elif function_provider == "openai":
-        logger.debug(f"Using OpenAI embedding model '{model}'")
+        logger.debug(f"Using OpenAI embedding model '{validated_model}'")
         return OpenAIEmbeddingFunction(
             api_key=os.getenv("OPENAI_API_KEY"),
+            model=validated_model,
         )
     elif function_provider == "gemini":
-        logger.debug("Using Gemini embedding model")
+        logger.debug(f"Using Gemini embedding model '{validated_model}'")
         return GoogleGenerativeAiEmbeddingFunction(
             api_key=os.getenv("GEMINI_API_KEY"),
-            # model_name= "models/embedding-001",
+            model_name=f"models/{validated_model}",
         )
     else:
         logger.error(f"Invalid embedding function provider: {function_provider}")

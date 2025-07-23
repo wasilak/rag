@@ -5,6 +5,7 @@ from libs.args import parse_arguments
 from libs.database import process_data_fill
 from libs.search import process_search
 from libs.chat import process_chat
+from libs.list_models import process_list_models
 from chromadb.config import Settings
 
 logger = logging.getLogger("RAG")
@@ -19,17 +20,21 @@ def main():
     for noisy_logger in ["httpx", "urllib3", "chromadb", "openai", "httpcore"]:
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
+    # Handle list-models command (doesn't need ChromaDB client)
+    if args.subparser == "list-models":
+        process_list_models(provider=args.provider)
+        return
+
     client = chromadb.PersistentClient(path=args.db_path, settings=Settings(anonymized_telemetry=False))
 
     if args.subparser == "data-fill":
         process_data_fill(
             client=client,
-            collection=args.collection,
+            collection_name=args.collection,
             source_paths=args.source_path,
             source_type=args.source_type,
             mode=args.mode,
             cleanup=args.cleanup,
-            llm=args.llm,
             embedding_model=args.embedding_model,
             embedding_llm=args.embedding_llm,
         )

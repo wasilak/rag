@@ -5,11 +5,20 @@ from langchain_community.document_loaders import UnstructuredMarkdownLoader, Asy
 from langchain_community.document_transformers import MarkdownifyTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from .embedding import set_embedding_function
+from chromadb.api import ClientAPI
+from chromadb.api.types import QueryResult
+from typing import Sequence, List, Optional
+from langchain_core.documents import Document
+from chromadb.api.types import (
+    Metadata,
+    QueryResult,
+    OneOrMany,
+)
 
 logger = logging.getLogger("RAG")
 
 
-def delete_collection(client, collection):
+def delete_collection(client: ClientAPI, collection: str) -> None:
     """Delete a collection from ChromaDB"""
     logger.debug(f"Deleting collection '{collection}'")
     try:
@@ -19,7 +28,7 @@ def delete_collection(client, collection):
         print(f"Error deleting collection {collection}: {e}")
 
 
-def load_documents(source_path, source_type, mode):
+def load_documents(source_path: str, source_type: str, mode: str) -> list[Document] | Sequence[Document]:
     """Load documents from file or URL"""
     if source_type == "file":
         full_path = os.path.abspath(source_path)
@@ -49,9 +58,11 @@ def load_documents(source_path, source_type, mode):
     return documents
 
 
-def process_markdown_documents(chunks, mode, id_prefix):
+def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix: str) -> tuple[List[str], Optional[OneOrMany[Metadata]], List[str]]:
     """Process markdown documents and extract metadata"""
-    documents, metadata, ids = [], [], []
+    documents: List[str] = []
+    metadata: Optional[OneOrMany[Metadata]] = []
+    ids: List[str] = []
     logger.debug(f"Processing {len(chunks)} chunks in {mode} mode")
 
     if mode == "single":
@@ -106,21 +117,22 @@ def process_markdown_documents(chunks, mode, id_prefix):
     return documents, metadata, ids
 
 
-def bootstrap_db(client, collection, raw_documents, llm, embedding_model, embedding_llm, mode, id_prefix):
+def bootstrap_db(client: ClientAPI, collection_name: str, raw_documents, embedding_model: str, embedding_llm: str, mode: str, id_prefix: str) -> None:
     """Bootstrap the database with documents"""
-    logger.debug(f"Bootstrapping collection '{collection}' with {len(raw_documents)} documents")
+    logger.debug(f"Bootstrapping collection '{collection_name}' with {len(raw_documents)} documents")
     logger.debug(f"Using Ollama embedding model '{embedding_model}'")
     embedding_function = set_embedding_function(embedding_llm, embedding_model)
 
     try:
-        logger.debug(f"Creating/getting collection {collection} with Ollama embedding function...")
+        logger.debug(f"Creating/getting collection {collection_name} with Ollama embedding function...")
         collection = client.get_or_create_collection(
-            name=collection,
+            name=collection_name,
             embedding_function=embedding_function
         )
         logger.debug(f"Collection '{collection}' created/gotten")
     except Exception as e:
-        logger.error(f"Error creating/getting collection {collection}: {e}")
+        logger.error(f"Error creating/getting collection {collection_name}: {e}")
+        exit(1)
 
     logger.debug(f"Splitting {len(raw_documents)} documents into chunks")
     splitter = RecursiveCharacterTextSplitter(
@@ -135,21 +147,21 @@ def bootstrap_db(client, collection, raw_documents, llm, embedding_model, embedd
 
     documents, metadata, ids = process_markdown_documents(chunks, mode, id_prefix)
 
-    logger.debug(f"Upserting {len(documents)} documents into collection '{collection}'")
+    logger.debug(f"Upserting {len(documents)} documents into collection '{collection_name}'")
     collection.upsert(
         documents=documents,
         metadatas=metadata,
         ids=ids
     )
-    logger.debug(f"Upserted {len(documents)} documents into collection '{collection}'")
+    logger.debug(f"Upserted {len(documents)} documents into collection '{collection_name}'")
 
 
-def process_data_fill(client, collection, source_paths, source_type, mode, cleanup, llm, embedding_model, embedding_llm):
+def process_data_fill(client: ClientAPI, collection_name: str, source_paths: list[str], source_type: str, mode: str, cleanup: bool, embedding_model: str, embedding_llm: str) -> None:
     """Process data fill operation for multiple sources"""
-    logger.debug(f"Filling collection '{collection}' with data from {source_paths}")
+    logger.debug(f"Filling collection '{collection_name}' with data from {source_paths}")
 
     if cleanup:
-        delete_collection(client, collection)
+        delete_collection(client, collection_name)
 
     for source_path in source_paths:
         id_prefix = hashlib.sha256(source_path.encode()).hexdigest()[:20]
@@ -161,7 +173,22 @@ def process_data_fill(client, collection, source_paths, source_type, mode, clean
             logger.warning(f"No documents found in {source_path}. Skipping...")
             continue
 
-        logger.debug(f"Bootstrapping collection '{collection}' with {len(documents)} documents")
-        bootstrap_db(client, collection, documents, llm, embedding_model, embedding_llm, mode, id_prefix)
+        logger.debug(f"Bootstrapping collection '{collection_name}' with {len(documents)} documents")
+        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, mode, id_prefix)
 
-    logger.debug(f"Collection '{collection}' has been created and filled with data.")
+    logger.debug(f"Collection '{collection_name}' has been created and filled with data.")
+
+def search(client: ClientAPI, collection_name: str, query: str, embedding_function) -> QueryResult:
+    """Search for documents in the collection"""
+    logger.debug(f"Searching collection '{collection_name}' with query '{query}'")
+
+    """Search for documents in the collection and generate response"""
+    collection = client.get_or_create_collection(name=collection_name, embedding_function=embedding_function)
+
+    # https://docs.trychroma.com/docs/overview/getting-started
+    results = collection.query(
+        query_texts=[query],  # Chroma will embed this for you
+        n_results=4  # how many results to return
+    )
+
+    return results

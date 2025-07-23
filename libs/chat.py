@@ -11,6 +11,8 @@ from openai import OpenAI
 import tiktoken
 from .embedding import set_embedding_function
 from .utils import format_footnotes
+from .models import get_best_model
+from chromadb.api import ClientAPI
 
 logger = logging.getLogger("RAG")
 
@@ -18,7 +20,7 @@ logger = logging.getLogger("RAG")
 class ChatMessage(Static):
     """A widget to display a chat message"""
 
-    def __init__(self, content: str, is_user: bool = True, model_name: str = "", **kwargs):
+    def __init__(self, content: str, is_user: bool = True, model_name: str = "", **kwargs) -> None:
         super().__init__(**kwargs)
         self.content = content
         self.is_user = is_user
@@ -155,7 +157,8 @@ class ChatApp(App):
         self.client = client
         self.collection_name = collection_name
         self.llm = llm
-        self.model = model
+        # Validate and get best available model
+        self.model = get_best_model(llm, model, "chat")
         self.embedding_model = embedding_model
         self.embedding_llm = embedding_llm
         self.llm_client = None
@@ -201,7 +204,7 @@ class ChatApp(App):
         self.conversation_history.clear()
         self.total_tokens_used = 0
         self._update_token_display()
-        self.query_one("#status").update(f"Chat cleared. Ready to chat with {self.model}!")
+        self.query_one("#status", Static).update(f"Chat cleared. Ready to chat with {self.model}!")
 
     def action_show_info(self) -> None:
         """Show chat information"""
@@ -258,8 +261,8 @@ class ChatApp(App):
         self.embedding_function = set_embedding_function(self.embedding_llm, self.embedding_model)
 
         # Set text content after mounting
-        self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
-        
+        self.query_one("#status", Static).update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
+
         # Initialize token display
         self._update_token_display()
 
@@ -294,7 +297,7 @@ class ChatApp(App):
         total_tokens = 0
         user_tokens = 0
         assistant_tokens = 0
-        
+
         for message in self.conversation_history:
             tokens = self._count_tokens(message["content"])
             total_tokens += tokens
@@ -302,7 +305,7 @@ class ChatApp(App):
                 user_tokens += tokens
             else:
                 assistant_tokens += tokens
-        
+
         return {
             "total": total_tokens,
             "user": user_tokens,
@@ -313,7 +316,7 @@ class ChatApp(App):
         """Update the token info display"""
         token_counts = self._count_conversation_tokens()
         token_info = f"💬 Messages: {len(self.conversation_history)} | 🎯 Total Tokens: {token_counts['total']} | 👤 User: {token_counts['user']} | 🤖 Assistant: {token_counts['assistant']}"
-        self.query_one("#token-info").update(token_info)
+        self.query_one("#token-info", Label).update(token_info)
 
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
@@ -342,7 +345,7 @@ class ChatApp(App):
         """Handle button press"""
         # Handle send button
         if event.button.id == "send-button":
-            text_area = self.query_one("#message-input")
+            text_area = self.query_one("#message-input", TextArea)
             message = text_area.text.strip()
             if message:
                 self._process_message(message)
@@ -357,7 +360,7 @@ class ChatApp(App):
             self.action_command_palette()
         elif event.key == "ctrl+enter":
             # For TextArea, we need to handle Ctrl+Enter manually
-            text_area = self.query_one("#message-input")
+            text_area = self.query_one("#message-input", TextArea)
             message = text_area.text.strip()
             if message:
                 self._process_message(message)
@@ -368,18 +371,18 @@ class ChatApp(App):
     def _process_message(self, message: str) -> None:
         """Process a user message"""
         # Clear input
-        text_area = self.query_one("#message-input")
+        text_area = self.query_one("#message-input", TextArea)
         text_area.text = ""
 
         # Add user message to chat
-        chat_history = self.query_one("#chat-history")
+        chat_history = self.query_one("#chat-history", ChatHistory)
         chat_history.add_message(message, is_user=True)
 
         # Update token display
         self._update_token_display()
 
         # Update status
-        self.query_one("#status").update(f"🤔 Thinking with {self.model}...")
+        self.query_one("#status", Static).update(f"🤔 Thinking with {self.model}...")
 
         # Process the message asynchronously
         self._generate_response(message)
@@ -409,20 +412,29 @@ class ChatApp(App):
             messages = [{"role": "system", "content": system_prompt}]
             messages.extend(self.conversation_history)
 
+            # Check if llm_client is None
+            if self.llm_client is None:
+                self.call_from_thread(self._update_chat_with_response, "Error: LLM client not initialized.")
+                return
+
             # Generate response
             response = self.llm_client.chat.completions.create(
                 model=self.model,
-                messages=messages
+                messages=messages  # type: ignore
             )
 
             if response.choices:
                 assistant_message = response.choices[0].message.content
 
-                # Add to conversation history
-                self.conversation_history.append({"role": "assistant", "content": assistant_message})
+                # Ensure assistant_message is not None
+                if assistant_message is not None:
+                    # Add to conversation history
+                    self.conversation_history.append({"role": "assistant", "content": assistant_message})
 
-                # Update UI in main thread
-                self.call_from_thread(self._update_chat_with_response, assistant_message)
+                    # Update UI in main thread
+                    self.call_from_thread(self._update_chat_with_response, assistant_message)
+                else:
+                    self.call_from_thread(self._update_chat_with_response, "Sorry, I received an empty response.")
             else:
                 self.call_from_thread(self._update_chat_with_response, "Sorry, I couldn't generate a response.")
 
@@ -475,12 +487,14 @@ class ChatApp(App):
 
         footnotes_metadata = []
 
-        for i, item in enumerate(results["documents"][0]):
-            metadata_entry = results["metadatas"][0][i]
-            footnotes_metadata.append(metadata_entry)
+        # Check if documents and metadatas are not None
+        if results["documents"] is not None and results["metadatas"] is not None:
+            for i, item in enumerate(results["documents"][0]):
+                metadata_entry = results["metadatas"][0][i]
+                footnotes_metadata.append(metadata_entry)
 
-            system_prompt += f"{i + 1}. \"{item}\"\n"
-            system_prompt += f"metadata: {metadata_entry}\n\n"
+                system_prompt += f"{i + 1}. \"{item}\"\n"
+                system_prompt += f"metadata: {metadata_entry}\n\n"
 
         # Format footnotes from metadata
         footnotes = format_footnotes(footnotes_metadata)
@@ -490,16 +504,16 @@ class ChatApp(App):
 
     def _update_chat_with_response(self, response: str) -> None:
         """Update chat with assistant response"""
-        chat_history = self.query_one("#chat-history")
+        chat_history = self.query_one("#chat-history", ChatHistory)
         chat_history.add_message(response, is_user=False, model_name=self.model)
-        
+
         # Update token display
         self._update_token_display()
-        
-        self.query_one("#status").update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
+
+        self.query_one("#status", Static).update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
 
 
-def process_chat(client, collection, llm, model, embedding_model, embedding_llm):
+def process_chat(client: ClientAPI, collection: str, llm: str, model: str, embedding_model: str, embedding_llm: str) -> None:
     """Process chat operation"""
     # Disable logging during chat to prevent UI interference
     logging.getLogger().handlers.clear()
