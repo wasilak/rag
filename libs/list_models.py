@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from .models import get_model_manager
+import humanize
 
 logger = logging.getLogger("RAG")
 console = Console()
@@ -46,7 +47,7 @@ def _display_models_table(provider: str, models: List[Dict]) -> None:
         table.add_column("Size", style="magenta")
 
         for model in models:
-            size = _format_size(model.get('size', 0))
+            size = humanize.naturalsize(model.get('size', 0), binary=True)
             table.add_row(
                 model.get('name', 'N/A'),
                 size,
@@ -92,50 +93,3 @@ def _display_default_models(provider: str, manager) -> None:
 
     except Exception as e:
         logger.debug(f"Could not display defaults for {provider}: {e}")
-
-
-def _format_size(size_bytes: int) -> str:
-    """Format size in bytes to human readable format"""
-    if size_bytes == 0:
-        return "N/A"
-
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} PB"
-
-
-def _format_date(date_input) -> str:
-    """Format date string or datetime object"""
-    if not date_input:
-        return "N/A"
-
-    try:
-        from datetime import datetime
-
-        # If it's already a datetime object
-        if isinstance(date_input, datetime):
-            return date_input.strftime("%Y-%m-%d %H:%M")
-
-        # Handle string input
-        date_str = str(date_input)
-        if 'T' in date_str:
-            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return dt.strftime("%Y-%m-%d %H:%M")
-        return date_str
-    except:
-        return str(date_input) if date_input else "N/A"
-
-
-def _format_timestamp(timestamp: int) -> str:
-    """Format Unix timestamp to readable date"""
-    if timestamp == 0:
-        return "N/A"
-
-    try:
-        from datetime import datetime
-        dt = datetime.fromtimestamp(timestamp)
-        return dt.strftime("%Y-%m-%d %H:%M")
-    except:
-        return "N/A"

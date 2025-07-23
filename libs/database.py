@@ -6,7 +6,6 @@ from langchain_community.document_transformers import MarkdownifyTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from .embedding import set_embedding_function
 from chromadb.api import ClientAPI
-from chromadb.api.types import QueryResult
 from typing import Sequence, List, Optional
 from langchain_core.documents import Document
 from chromadb.api.types import (

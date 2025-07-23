@@ -24,7 +24,7 @@ def set_embedding_function(function_provider: str, model: str) -> EmbeddingFunct
         logger.debug(f"Using OpenAI embedding model '{validated_model}'")
         return OpenAIEmbeddingFunction(
             api_key=os.getenv("OPENAI_API_KEY"),
-            model=validated_model,
+            model_name=validated_model,
         )
     elif function_provider == "gemini":
         logger.debug(f"Using Gemini embedding model '{validated_model}'")

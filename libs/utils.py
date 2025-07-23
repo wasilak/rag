@@ -24,12 +24,15 @@ def format_footnotes(metadatas: list[dict]) -> str:
     return result
 
 
-def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_theme: str = "monokai"):
+def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_theme: str = "monokai", borders_only: str = "all"):
     """
     Render markdown with:
     - Styled headings
     - Syntax-highlighted code blocks
     - Wrapped in a panel for emphasis
+
+    Args:
+        borders_only: "all" for full borders, "top_bottom" for top/bottom only
     """
     # Define a default custom theme for markdown
     custom_theme = Theme({
@@ -45,5 +48,13 @@ def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_
 
     md_render = Markdown(md, code_theme=code_theme)
 
-    # Wrap in a panel with a title
-    console.print(Panel(md_render, title=title, border_style=border_style, expand=True)) 
+    # Create custom border style for top/bottom only
+    if borders_only == "top_bottom":
+        # Use simple horizontal separators instead of full panel borders
+        from rich.rule import Rule
+        console.print(Rule(title, style=border_style))
+        console.print(md_render)
+        console.print(Rule(style=border_style))
+    else:
+        # Use default full borders
+        console.print(Panel(md_render, title=title, border_style=border_style, expand=True))

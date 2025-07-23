@@ -63,19 +63,21 @@ def search(client_llm: OpenAI, model: str, client, collection_name: str, query: 
     - Use only the provided document text — do not invent or guess.
     - Use full sentences and clearly explained reasoning.
     - Every factual statement must be annotated with a footnote reference like [1], [2], etc.
+    - deduplicate footnotes! that means if you have a footnote [1] already, don't repeat it in response as [2] and so on.
+    - if it makes sense, use quotes for direct citations from the documents.
+    - if it makes sense, use headings, lists, tables, code blocks and other Markdown features to improve readability, especilayy to highlight important information, sections, topics, etc.
+    - all response content (headings, paragraphs, lists, tables, code blocks, etc.) should be left-aligned, not centered!
+    - if you use quotes, make sure to use them correctly, with proper spacing and punctuation.
+
 
     Footnotes must:
     - Be deduplicated
     - Follow the format:
       [1] "{section}" in "{page}", `{source}`
 
-    VERY IMPORTANT:
-    - yor response must be nicely formatted in valid Markdown, with footnotes at the end of the answer
-    - Use text formatting like bold, italics, and code blocks as needed.
-    - use quotes for direct citations from the documents.
-    - Use headings, lists, and other Markdown features to improve readability.
-
-    If the documents do not answer the question, respond with: I don't know.
+    If the documents do not answer the question, respond with: I don't know, unless it is about code generation.
+    If document refers to external resources, you can use them.
+    If you don't know the answer, BUT! user requested code examples, do not scope your answert to only documents provided, but reach out to your knowledge to figure out how to generate code examples, but they have to based only on information provided in the documents.
     """
 
     footnotes_metadata = []
@@ -95,7 +97,7 @@ def search(client_llm: OpenAI, model: str, client, collection_name: str, query: 
 
     # print(system_prompt)
     if logger.isEnabledFor(logging.DEBUG):
-      print_fancy_markdown(system_prompt, "📝 System Prompt", border_style="blue")
+      print_fancy_markdown(system_prompt, "📝 System Prompt", border_style="blue", borders_only="top_bottom")
 
     if dry_run:
         exit(0)
@@ -110,7 +112,7 @@ def search(client_llm: OpenAI, model: str, client, collection_name: str, query: 
 
     if len(response.choices) > 0:
         markdown_content = response.choices[0].message.content if response.choices[0].message.content else "No content returned"
-        print_fancy_markdown(markdown_content, "📝 Agent Reply")
+        print_fancy_markdown(markdown_content, "📝 Agent Reply", borders_only="top_bottom")
     else:
         print("No response from OpenAI API")
         print(response)
