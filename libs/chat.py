@@ -20,6 +20,13 @@ logger = logging.getLogger("RAG")
 class ChatMessage(Static):
     """A widget to display a chat message"""
 
+    DEFAULT_CSS = """
+    ChatMessage {
+        border: none;
+        padding: 0;
+    }
+    """
+
     def __init__(self, content: str, is_user: bool = True, model_name: str = "", **kwargs) -> None:
         super().__init__(**kwargs)
         self.content = content
@@ -27,21 +34,33 @@ class ChatMessage(Static):
         self.model_name = model_name
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-        # Add CSS class based on message type
-        if self.is_user:
-            self.add_class("user-message")
-        else:
-            self.add_class("bot-message")
 
     def on_mount(self) -> None:
         """Set up the message display"""
+        from rich.markdown import Markdown
+        from rich.panel import Panel
+        from rich.style import Style
+
         # Create header with timestamp
         user_info = "👤 User" if self.is_user else f"🤖 {self.model_name}" if self.model_name else "🤖 Bot"
-        header = f"[{self.timestamp}] {user_info}"
+        header = f"{self.timestamp} {user_info}"
 
-        # Format the message content
-        message_content = f"{header}\n\n{self.content}"
-        self.update(message_content)
+        # Create markdown rendered content
+        style = Style(color="white")
+        markdown_content = Markdown(
+            self.content,
+            code_theme="monokai",
+            style=style
+        )
+
+        # Combine header with markdown content in a panel
+        panel = Panel(
+            markdown_content,
+            title=header,
+            border_style="bright_blue" if self.is_user else "green",
+            padding=(0, 1)
+        )
+        self.update(panel)
 
 
 class ChatHistory(ScrollableContainer):
