@@ -1,9 +1,12 @@
 import os
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any, cast
 import ollama
 import openai
-import google.generativeai as genai
+from google.api_core import client_options
+from google.ai import generativelanguage as glanguage
+from google.auth import credentials as google_auth
+from google.oauth2 import service_account
 
 logger = logging.getLogger("RAG")
 
@@ -12,7 +15,7 @@ class ModelDefaults:
     """Default models for each LLM provider"""
 
     OLLAMA = {
-        "chat": "qwen2.5:14b",
+        "chat": "qwen3:8b",
         "embedding": "nomic-embed-text"
     }
 
@@ -223,23 +226,50 @@ class ModelManager:
     def _list_gemini_models(self) -> List[Dict]:
         """List Gemini models"""
         try:
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                logger.error("GEMINI_API_KEY not found in environment")
-                return []
+            # Check for service account credentials first
+            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+            if credentials_path:
+                try:
+                    credentials = service_account.Credentials.from_service_account_file(
+                        credentials_path,
+                        scopes=['https://www.googleapis.com/auth/cloud-platform']
+                    )
+                except Exception as e:
+                    logger.error(f"Error loading service account credentials: {e}")
+                    return []
+            else:
+                # Fall back to API key if no service account
+                api_key = os.getenv("GEMINI_API_KEY")
+                if not api_key:
+                    logger.error("Neither GOOGLE_APPLICATION_CREDENTIALS nor GEMINI_API_KEY found in environment")
+                    return []
+                credentials = google_auth.AnonymousCredentials()
 
-            genai.configure(api_key=api_key)
-            models = genai.list_models()
+            # Initialize Gemini client
+            client_opts = client_options.ClientOptions(
+                api_endpoint="generativelanguage.googleapis.com",
+                quota_project_id=os.getenv("GOOGLE_CLOUD_PROJECT")
+            )
+            model_client = glanguage.ModelServiceClient(
+                credentials=credentials,
+                client_options=client_opts
+            )
+
+            # List available models
+            request = glanguage.ListModelsRequest()
+            response = model_client.list_models(request)
+            models = cast(List[glanguage.Model], response.models)
 
             # Format the response
-            formatted_models = []
+            formatted_models: List[Dict[str, Any]] = []
             for model in models:
+                model_id = model.name.split('/')[-1]
                 formatted_models.append({
-                    'id': model.name.replace('models/', ''),
-                    'name': model.name.replace('models/', ''),
+                    'id': model_id,
+                    'name': model_id,
                     'display_name': model.display_name,
                     'description': model.description,
-                    'supported_generation_methods': model.supported_generation_methods,
+                    'supported_generation_methods': [method for method in model.supported_generation_methods],
                     'provider': 'gemini'
                 })
 
@@ -263,11 +293,15 @@ class ModelManager:
         return True  # Default to True if no specific capability check
 
 
+# Singleton instance
+_model_manager_instance: Optional[ModelManager] = None
+
 def get_model_manager() -> ModelManager:
     """Get singleton instance of ModelManager"""
-    if not hasattr(get_model_manager, '_instance'):
-        get_model_manager._instance = ModelManager()
-    return get_model_manager._instance
+    global _model_manager_instance
+    if _model_manager_instance is None:
+        _model_manager_instance = ModelManager()
+    return _model_manager_instance
 
 
 def list_provider_models(provider: str) -> List[Dict]:

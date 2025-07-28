@@ -17,6 +17,7 @@ A powerful, flexible RAG (Retrieval-Augmented Generation) system that turns your
 - 📄 Local markdown files
 - 🌐 Web URLs with smart content extraction
 - 🔄 Batch processing of multiple sources
+- 🧹 **LLM-powered document cleaning** - Remove ads, navigation, and obsolete content
 - 🎯 Smart chunking with overlap for better context
 
 💬 **Interactive Chat Interface**
@@ -65,6 +66,9 @@ python main.py data-fill examples/markdown.md
 # Add web content
 python main.py data-fill https://example.com/docs --source-type url
 
+# Add web content with cleaning (removes ads, navigation, etc.)
+python main.py data-fill https://example.com/docs --source-type url --enable-cleaning
+
 # Batch process multiple files
 python main.py data-fill docs/*.md --cleanup
 ```
@@ -98,6 +102,12 @@ Options:
   --embedding-model MODEL      Embedding model (default: nomic-embed-text)
   --embedding-llm [openai|ollama|gemini] Embedding LLM provider (default: ollama)
   --llm [openai|ollama|gemini] LLM provider (default: ollama)
+
+Document Cleaning Options:
+  --enable-cleaning            Enable document cleaning to remove ads, navigation, obsolete content
+  --cleaning-llm [openai|ollama|gemini] LLM provider for cleaning (default: ollama)
+  --cleaning-model MODEL       Model for document cleaning (default: qwen3:8b)
+  --cleaning-prompt PROMPT     Custom cleaning prompt (optional)
 ```
 
 ### 🔍 Search
@@ -155,6 +165,12 @@ export RAG_MODEL="qwen3:8b"
 export RAG_EMBEDDING_LLM="ollama"
 export RAG_EMBEDDING_MODEL="nomic-embed-text"
 
+# Document Cleaning settings
+export RAG_ENABLE_CLEANING="true"
+export RAG_CLEANING_LLM="ollama"
+export RAG_CLEANING_MODEL="qwen3:8b"
+export RAG_CLEANING_PROMPT="custom cleaning instructions..."
+
 # API Keys (if using cloud providers)
 export OPENAI_API_KEY="your-key-here"
 export GEMINI_API_KEY="your-key-here"
@@ -164,18 +180,20 @@ export GEMINI_API_KEY="your-key-here"
 
 ```mermaid
 flowchart TD
-    A[📄 Documents<br/>• Markdown<br/>• Web Content<br/>• Local Files] --> B[⚙️ Processing<br/>• Chunking<br/>• Embedding<br/>• Metadata]
-    B --> C[🗄️ Vector Store<br/>ChromaDB]
+    A[📄 Documents<br/>• Markdown<br/>• Web Content<br/>• Local Files] --> B[🧹 Document Cleaning<br/>• Remove ads<br/>• Remove navigation<br/>• Keep core content<br/>• LLM-powered]
+    B --> C[⚙️ Processing<br/>• Chunking<br/>• Embedding<br/>• Metadata]
+    C --> D[🗄️ Vector Store<br/>ChromaDB]
 
-    D[🔍 User Query] --> E[🎯 Retrieval<br/>• Similarity Search<br/>• Context Gathering<br/>• Metadata Matching]
-    C --> E
-    E --> F[🤖 LLM<br/>• OpenAI<br/>• Ollama<br/>• Gemini]
-    F --> G[📝 Response<br/>• Formatted<br/>• Citations<br/>• Markdown]
+    E[🔍 User Query] --> F[🎯 Retrieval<br/>• Similarity Search<br/>• Context Gathering<br/>• Metadata Matching]
+    D --> F
+    F --> G[🤖 LLM<br/>• OpenAI<br/>• Ollama<br/>• Gemini]
+    G --> H[📝 Response<br/>• Formatted<br/>• Citations<br/>• Markdown]
 
     style A fill:#e1f5fe
-    style C fill:#f3e5f5
-    style F fill:#fff3e0
-    style G fill:#e8f5e8
+    style B fill:#fff8e1
+    style D fill:#f3e5f5
+    style G fill:#fff3e0
+    style H fill:#e8f5e8
 ```
 
 ## 📖 Examples
@@ -186,11 +204,14 @@ flowchart TD
 # Single markdown file with smart chunking
 python main.py data-fill docs/guide.md --mode elements
 
-# Web documentation
-python main.py data-fill https://docs.example.com --source-type url
+# Web documentation with cleaning
+python main.py data-fill https://docs.example.com --source-type url --enable-cleaning
 
 # Multiple files with collection reset
 python main.py data-fill *.md docs/*.md --cleanup --collection "project-docs"
+
+# Clean web content with custom model
+python main.py data-fill https://messy-website.com --source-type url --enable-cleaning --cleaning-model "gpt-4o" --cleaning-llm openai
 ```
 
 ### Advanced Search Queries

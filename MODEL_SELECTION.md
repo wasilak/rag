@@ -5,6 +5,7 @@ This document describes the model selection and validation system for the RAG ap
 ## Overview
 
 The model selection system provides:
+
 - **Default models** for each provider (chat and embedding)
 - **Model validation** to ensure requested models exist
 - **Automatic fallback** to default models if validation fails
@@ -15,16 +16,22 @@ The model selection system provides:
 The system includes pre-configured default models for each provider:
 
 ### Ollama
-- **Chat Model**: `qwen2.5:14b`
+
+- **Chat Model**: `qwen3:8b`
 - **Embedding Model**: `nomic-embed-text`
+- **Document Cleaning Model**: `qwen3:8b` (same as chat model)
 
 ### OpenAI
+
 - **Chat Model**: `gpt-4o`
 - **Embedding Model**: `text-embedding-3-small`
+- **Document Cleaning Model**: `gpt-4o` (same as chat model)
 
 ### Gemini
+
 - **Chat Model**: `gemini-1.5-flash`
 - **Embedding Model**: `text-embedding-004`
+- **Document Cleaning Model**: `gemini-1.5-flash` (same as chat model)
 
 ## Listing Available Models
 
@@ -55,6 +62,7 @@ When you specify a model, the system automatically:
 ### Ollama Model Matching
 
 For Ollama models, the system handles tag formats intelligently:
+
 - If you specify `nomic-embed-text`, it will match `nomic-embed-text:latest`
 - Both the full name (`model:tag`) and base name (`model`) are supported
 
@@ -80,6 +88,12 @@ python main.py search "your query" \
   --model "gpt-4o-mini" \
   --embedding-llm openai \
   --embedding-model "text-embedding-3-large"
+
+# Use custom models for document cleaning
+python main.py data-fill https://example.com --source-type url \
+  --enable-cleaning \
+  --cleaning-llm openai \
+  --cleaning-model "gpt-4o-mini"
 ```
 
 ### Model Validation in Action
@@ -88,7 +102,7 @@ python main.py search "your query" \
 # This will validate the model and use it if found
 python main.py search "test" --model "qwen3:8b"
 
-# This will warn and fall back to default (qwen2.5:14b)
+# This will warn and fall back to default (qwen3:8b)
 python main.py search "test" --model "nonexistent-model"
 ```
 
@@ -101,6 +115,8 @@ export RAG_LLM=openai
 export RAG_MODEL=gpt-4o-mini
 export RAG_EMBEDDING_LLM=openai
 export RAG_EMBEDDING_MODEL=text-embedding-3-small
+export RAG_CLEANING_LLM=openai
+export RAG_CLEANING_MODEL=gpt-4o-mini
 ```
 
 ## API Keys Required
@@ -175,26 +191,33 @@ Use debug logging to see detailed model validation information:
 
 ```bash
 python main.py --log-level DEBUG search "your query"
+python main.py --log-level DEBUG data-fill https://example.com --source-type url --enable-cleaning
 ```
 
 This will show:
+
 - Model validation attempts
 - API responses
 - Fallback decisions
 - Model selection reasoning
+- Document cleaning progress and character reduction statistics
 
 ## Model Types
 
-The system recognizes two model types:
+The system recognizes three model types:
 
 - **chat**: Models used for text generation and conversation
 - **embedding**: Models used for text embedding and semantic search
+- **cleaning**: Models used for document cleaning (removes ads, navigation, obsolete content)
+
+Note: Document cleaning uses the same models as chat models, as it requires text generation capabilities to clean and restructure content.
 
 Each provider may have different models optimized for these tasks.
 
 ## Future Enhancements
 
 Planned improvements include:
+
 - Model performance caching
 - Custom model configuration files
 - Model recommendation based on task type

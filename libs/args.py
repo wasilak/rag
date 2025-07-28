@@ -22,6 +22,7 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_MODE: Processing mode for data-fill (default: "single")
     - RAG_BUCKET_NAME: S3 bucket name for uploading markdown files (optional)
     - RAG_BUCKET_PATH: S3 bucket path for uploading markdown files (optional)
+    - RAG_ENABLE_CLEANING: Enable document cleaning (default: "false")
     """
     # Create a parent parser for shared arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
@@ -70,12 +71,15 @@ def parse_arguments() -> argparse.Namespace:
                              help="S3 bucket name for uploading markdown files (optional)")
     data_subparser.add_argument("--bucket-path", type=str, default="rag-knowledge-base",
                              help="S3 bucket path for uploading markdown files (optional)")
+    data_subparser.add_argument("--clean-content", action='store_true',
+                             default=(get_env_default("RAG_CLEAN_CONTENT", "false") or "false").lower() == "true",
+                             help="Clean document content by removing navigation, ads, and UI clutter before processing (env: RAG_CLEAN_CONTENT)")
 
     # search subcommand
     search_parser = subparsers.add_parser("search", help="Search for documents in the collection", parents=[parent_parser])
     search_parser.add_argument("query", type=str, help="Query text to search for in the collection")
     search_parser.add_argument("--model", type=str,
-                             default=get_env_default("RAG_MODEL", "qwen2.5:14b"),
+                             default=get_env_default("RAG_MODEL", "qwen3:8b"),
                              help="Model to use for the LLM (env: RAG_MODEL)")
     # model="gpt-4o",
     # model="qwen3:8b",
@@ -86,7 +90,7 @@ def parse_arguments() -> argparse.Namespace:
     # chat subcommand
     chat_parser = subparsers.add_parser("chat", help="Interactive chat with documents", parents=[parent_parser])
     chat_parser.add_argument("--model", type=str,
-                           default=get_env_default("RAG_MODEL", "qwen2.5:14b"),
+                           default=get_env_default("RAG_MODEL", "qwen3:8b"),
                            help="Model to use for the LLM (env: RAG_MODEL)")
 
     # list-models subcommand
