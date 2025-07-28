@@ -47,6 +47,7 @@ def main():
     if len(args.db_path) > 0:
       client = chromadb.PersistentClient(path=args.db_path, settings=chroma_settings)
     else:
+      # https://docs.trychroma.com/reference/python/client
       client = chromadb.HttpClient(host='127.0.0.1', port=8000, settings=chroma_settings)
 
     if args.subparser == "data-fill":
