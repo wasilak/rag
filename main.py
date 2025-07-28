@@ -32,7 +32,7 @@ def main():
     root_logger.setLevel(args.log_level)
 
     # Suppress noisy HTTP and library logs
-    for noisy_logger in ["httpx", "urllib3", "chromadb", "openai", "httpcore"]:
+    for noisy_logger in ["httpx", "urllib3", "chromadb", "openai", "httpcore", "boto3", "botocore"]:
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
     # Handle list-models command (doesn't need ChromaDB client)
@@ -40,7 +40,14 @@ def main():
         process_list_models(provider=args.provider)
         return
 
-    client = chromadb.PersistentClient(path=args.db_path, settings=Settings(anonymized_telemetry=False))
+    chroma_settings = Settings(
+        anonymized_telemetry=False
+    )
+
+    if len(args.db_path) > 0:
+      client = chromadb.PersistentClient(path=args.db_path, settings=chroma_settings)
+    else:
+      client = chromadb.HttpClient(host='127.0.0.1', port=8000, settings=chroma_settings)
 
     if args.subparser == "data-fill":
         if args.cleanup:

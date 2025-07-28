@@ -12,7 +12,9 @@ def parse_arguments() -> argparse.Namespace:
 
     Environment Variables:
     - RAG_COLLECTION: Collection name (default: "RAG")
-    - RAG_DB_PATH: Database path (default: "db")
+    - RAG_CHROMADB_PATH: Database path (default: "")
+    - RAG_CHROMADB_HOST: ChromaDB host (default: "127.0.0.1")
+    - RAG_CHROMADB_PORT: ChromaDB port (default: 8000)
     - RAG_LOG_LEVEL: Log level (default: "INFO")
     - RAG_EMBEDDING_MODEL: Embedding model (default: "nomic-embed-text")
     - RAG_EMBEDDING_LLM: LLM provider for embedding function (default: "ollama")
@@ -31,9 +33,15 @@ def parse_arguments() -> argparse.Namespace:
     parent_parser.add_argument("--collection", type=str,
                              default=get_env_default("RAG_COLLECTION", "RAG"),
                              help="Name of the collection to use or create (env: RAG_COLLECTION)")
-    parent_parser.add_argument("--db-path", type=str,
-                             default=get_env_default("RAG_DB_PATH", "db"),
-                             help="Path to the ChromaDB database (env: RAG_DB_PATH)")
+    parent_parser.add_argument("--chromadb-path", type=str,
+                             default=get_env_default("RAG_CHROMADB_PATH", ""),
+                             help="Path to the ChromaDB database (env: RAG_CHROMADB_PATH)")
+    parent_parser.add_argument("--chromadb-host", type=str,
+                             default=get_env_default("RAG_CHROMADB_HOST", "127.0.0.1"),
+                             help="Host for the ChromaDB server (env: RAG_CHROMADB_HOST)")
+    parent_parser.add_argument("--chromadb-port", type=int,
+                             default=int(get_env_default("RAG_CHROMADB_PORT", 8000)),
+                             help="Port for the ChromaDB server (env: RAG_CHROMADB_PORT)")
     parent_parser.add_argument("--dry-run", action='store_true',
                              help="Run in dry-run mode without making changes")
     parent_parser.add_argument("--log-level", type=str,

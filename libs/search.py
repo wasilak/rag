@@ -112,7 +112,7 @@ def search(client_llm: OpenAI, model: str, client, collection_name: str, query: 
 
     if len(response.choices) > 0:
         markdown_content = response.choices[0].message.content if response.choices[0].message.content else "No content returned"
-        print_fancy_markdown(markdown_content, "📝 Agent Reply", borders_only="top_bottom")
+        print_fancy_markdown(markdown_content, "🤖 Agent Reply", borders_only="top_bottom")
     else:
         print("No response from OpenAI API")
         print(response)
