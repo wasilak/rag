@@ -1,12 +1,10 @@
 import os
 import logging
-from typing import Dict, List, Optional, Any, cast
+from typing import Dict, List, Optional
 import ollama
 import openai
-from google.api_core import client_options
 from google.ai import generativelanguage as glanguage
-from google.auth import credentials as google_auth
-from google.oauth2 import service_account
+from google.api_core import client_options
 
 logger = logging.getLogger("RAG")
 
@@ -102,16 +100,11 @@ class ModelManager:
                     if (model_id == model_name or
                         model_full_name == model_name or
                         model_base_name == model_name):
-                        # Additional validation for model type if available
-                        if 'capabilities' in model:
-                            return self._check_model_capabilities(model, model_type)
                         return True
                 else:
                     # For other providers, exact match
                     if model_id == model_name or model_full_name == model_name:
                         # Additional validation for model type if available
-                        if 'capabilities' in model:
-                            return self._check_model_capabilities(model, model_type)
                         return True
 
             logger.warning(f"Model '{model_name}' not found for {provider}")
@@ -226,50 +219,30 @@ class ModelManager:
     def _list_gemini_models(self) -> List[Dict]:
         """List Gemini models"""
         try:
-            # Check for service account credentials first
-            credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-            if credentials_path:
-                try:
-                    credentials = service_account.Credentials.from_service_account_file(
-                        credentials_path,
-                        scopes=['https://www.googleapis.com/auth/cloud-platform']
-                    )
-                except Exception as e:
-                    logger.error(f"Error loading service account credentials: {e}")
-                    return []
-            else:
-                # Fall back to API key if no service account
-                api_key = os.getenv("GEMINI_API_KEY")
-                if not api_key:
-                    logger.error("Neither GOOGLE_APPLICATION_CREDENTIALS nor GEMINI_API_KEY found in environment")
-                    return []
-                credentials = google_auth.AnonymousCredentials()
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                logger.error("GEMINI_API_KEY not found in environment")
+                return []
 
-            # Initialize Gemini client
+            # Create client with anonymous credentials and API key
             client_opts = client_options.ClientOptions(
                 api_endpoint="generativelanguage.googleapis.com",
-                quota_project_id=os.getenv("GOOGLE_CLOUD_PROJECT")
+                api_key=api_key
             )
             model_client = glanguage.ModelServiceClient(
-                credentials=credentials,
-                client_options=client_opts
+                client_options=client_opts,
             )
-
-            # List available models
             request = glanguage.ListModelsRequest()
             response = model_client.list_models(request)
-            models = cast(List[glanguage.Model], response.models)
 
-            # Format the response
-            formatted_models: List[Dict[str, Any]] = []
-            for model in models:
+            formatted_models = []
+            for model in response.models:
                 model_id = model.name.split('/')[-1]
                 formatted_models.append({
                     'id': model_id,
                     'name': model_id,
                     'display_name': model.display_name,
                     'description': model.description,
-                    'supported_generation_methods': [method for method in model.supported_generation_methods],
                     'provider': 'gemini'
                 })
 
@@ -278,19 +251,6 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error listing Gemini models: {e}")
             return []
-
-    def _check_model_capabilities(self, model: Dict, model_type: str) -> bool:
-        """Check if model supports the required capability"""
-        capabilities = model.get('capabilities', [])
-
-        if model_type == "chat":
-            # For chat models, look for generation capabilities
-            return any(cap in ['generateContent', 'generate'] for cap in capabilities)
-        elif model_type == "embedding":
-            # For embedding models, look for embedding capabilities
-            return any(cap in ['embedContent', 'embed'] for cap in capabilities)
-
-        return True  # Default to True if no specific capability check
 
 
 # Singleton instance

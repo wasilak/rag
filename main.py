@@ -49,6 +49,8 @@ def main():
             logger.info("Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion.")
         else:
             logger.info("Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning.")
+        if args.extract_wisdom:
+            logger.info(f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights.")
         process_data_fill(
             client=client,
             collection_name=args.collection,
@@ -61,6 +63,8 @@ def main():
             bucket_name=args.bucket_name,
             bucket_path=args.bucket_path,
             clean_content=args.clean_content,
+            enable_wisdom=args.extract_wisdom,
+            fabric_command=args.fabric_command,
         )
 
     elif args.subparser == "search":

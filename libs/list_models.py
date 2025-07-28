@@ -65,13 +65,10 @@ def _display_models_table(provider: str, models: List[Dict]) -> None:
 
     elif provider == "gemini":
         table.add_column("Name", style="cyan")
-        table.add_column("Capabilities", style="yellow")
 
         for model in models:
-            capabilities = ', '.join(model.get('supported_generation_methods', []))
             table.add_row(
                 model.get('name', 'N/A'),
-                capabilities
             )
 
     console.print(table)
