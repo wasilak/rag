@@ -37,6 +37,8 @@ def main():
             cleanup=args.cleanup,
             embedding_model=args.embedding_model,
             embedding_llm=args.embedding_llm,
+            bucket_name=args.bucket_name,
+            bucket_path=args.bucket_path,
         )
 
     elif args.subparser == "search":

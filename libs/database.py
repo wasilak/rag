@@ -4,6 +4,8 @@ import hashlib
 from langchain_community.document_loaders import UnstructuredMarkdownLoader, AsyncHtmlLoader
 from langchain_community.document_transformers import MarkdownifyTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from libs.s3 import upload_markdown_to_s3
 from .embedding import set_embedding_function
 from chromadb.api import ClientAPI
 from typing import Sequence, List, Optional
@@ -13,6 +15,7 @@ from chromadb.api.types import (
     QueryResult,
     OneOrMany,
 )
+from .utils import sanitize_title
 
 logger = logging.getLogger("RAG")
 
@@ -27,7 +30,7 @@ def delete_collection(client: ClientAPI, collection: str) -> None:
         print(f"Error deleting collection {collection}: {e}")
 
 
-def load_documents(source_path: str, source_type: str, mode: str) -> list[Document] | Sequence[Document]:
+def load_documents(source_path: str, source_type: str, mode: str, bucket_name: str, bucket_path: str) -> list[Document] | Sequence[Document]:
     """Load documents from file or URL"""
     if source_type == "file":
         full_path = os.path.abspath(source_path)
@@ -53,6 +56,12 @@ def load_documents(source_path: str, source_type: str, mode: str) -> list[Docume
         md = MarkdownifyTransformer()
         documents = md.transform_documents(docs)
         logger.debug(f"Transformed {len(documents)} documents from {source_path}")
+
+        if len(bucket_name) != 0:
+          for doc in documents:
+            sanitized_title = sanitize_title(doc.metadata.get("title", "untitled"))
+            doc.metadata["file_path"] = f"{bucket_path}/{sanitized_title}.md"
+            upload_markdown_to_s3(doc.page_content, sanitized_title, bucket_path, bucket_name)
 
     return documents
 
@@ -155,7 +164,7 @@ def bootstrap_db(client: ClientAPI, collection_name: str, raw_documents, embeddi
     logger.debug(f"Upserted {len(documents)} documents into collection '{collection_name}'")
 
 
-def process_data_fill(client: ClientAPI, collection_name: str, source_paths: list[str], source_type: str, mode: str, cleanup: bool, embedding_model: str, embedding_llm: str) -> None:
+def process_data_fill(client: ClientAPI, collection_name: str, source_paths: list[str], source_type: str, mode: str, cleanup: bool, embedding_model: str, embedding_llm: str, bucket_name: str, bucket_path: str) -> None:
     """Process data fill operation for multiple sources"""
     logger.debug(f"Filling collection '{collection_name}' with data from {source_paths}")
 
@@ -166,7 +175,7 @@ def process_data_fill(client: ClientAPI, collection_name: str, source_paths: lis
         id_prefix = hashlib.sha256(source_path.encode()).hexdigest()[:20]
         logger.debug(f"Processing {source_path} with id prefix {id_prefix}")
 
-        documents = load_documents(source_path, source_type, mode)
+        documents = load_documents(source_path, source_type, mode, bucket_name, bucket_path)
 
         if len(documents) == 0:
             logger.warning(f"No documents found in {source_path}. Skipping...")

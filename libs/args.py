@@ -20,6 +20,8 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_MODEL: LLM model for search (default: "qwen3:8b")
     - RAG_SOURCE_TYPE: Source type for data-fill (default: "file")
     - RAG_MODE: Processing mode for data-fill (default: "single")
+    - RAG_BUCKET_NAME: S3 bucket name for uploading markdown files (optional)
+    - RAG_BUCKET_PATH: S3 bucket path for uploading markdown files (optional)
     """
     # Create a parent parser for shared arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
@@ -64,6 +66,10 @@ def parse_arguments() -> argparse.Namespace:
                              help="Mode for processing the data: 'single' for single file, 'elements' for multiple elements in a file (env: RAG_MODE)")
     data_subparser.add_argument("--cleanup", action='store_true',
                              help="Cleanup the collection before filling it")
+    data_subparser.add_argument("--bucket-name", type=str, default="",
+                             help="S3 bucket name for uploading markdown files (optional)")
+    data_subparser.add_argument("--bucket-path", type=str, default="rag-knowledge-base",
+                             help="S3 bucket path for uploading markdown files (optional)")
 
     # search subcommand
     search_parser = subparsers.add_parser("search", help="Search for documents in the collection", parents=[parent_parser])

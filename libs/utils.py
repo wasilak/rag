@@ -2,6 +2,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.theme import Theme
+import re
 
 
 def format_footnotes(metadatas: list[dict]) -> str:
@@ -58,3 +59,11 @@ def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_
     else:
         # Use default full borders
         console.print(Panel(md_render, title=title, border_style=border_style, expand=True))
+
+def sanitize_title(title: str) -> str:
+    """
+    Sanitize a title by replacing special characters and spaces with underscores.
+    Also ensures the title is lowercase.
+    """
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', title)
+    return sanitized.lower() if sanitized else "untitled"
