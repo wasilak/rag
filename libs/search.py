@@ -134,7 +134,7 @@ def process_search(
     logger.debug(f"Searching collection '{collection}' with query '{query}'")
 
     # Validate and get best available model
-    validated_model = get_best_model(llm, model, "chat")
+    validated_model = get_best_model(llm, embedding_ollama_host, embedding_ollama_port, model, "chat")
 
     client_llm = create_llm_client(llm, embedding_ollama_host, embedding_ollama_port)
     embedding_function = set_embedding_function(embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port)

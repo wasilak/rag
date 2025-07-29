@@ -204,7 +204,11 @@ def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> 
         wisdom = extract_wisdom(doc.page_content, fabric_command)
         if wisdom:
             # Create two versions of the document
-            base_title = doc.metadata.get("base_title", "untitled")
+            base_title = doc.metadata.get("base_title")
+            if not base_title:
+                # Fall back to the title field if base_title is not set
+                base_title = doc.metadata.get("title", "untitled")
+                doc.metadata["base_title"] = base_title
             wisdom_content, original_content = format_content(doc.page_content, base_title, wisdom)
 
             # Create wisdom document
@@ -261,6 +265,7 @@ def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: boo
     for doc in docs:
         title = doc.metadata.get("title", extract_title_from_html(doc.page_content))
         doc.metadata["title"] = title
+        doc.metadata["base_title"] = title  # Set base_title as well
 
     # Process documents
     docs = process_html_documents(docs, clean_content)

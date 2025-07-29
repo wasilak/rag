@@ -187,7 +187,7 @@ class ChatApp(App):
         self.collection_name = collection_name
         self.llm = llm
         # Validate and get best available model
-        self.model = get_best_model(llm, model, "chat")
+        self.model = get_best_model(llm, embedding_ollama_host, embedding_ollama_port, model, "chat")
         self.embedding_model = embedding_model
         self.embedding_llm = embedding_llm
         self.llm_client = None

@@ -12,7 +12,7 @@ def set_embedding_function(function_provider: str, model: str, embedding_ollama_
     logger.debug("Setting embedding function")
 
     # Get validated embedding model
-    validated_model = get_best_model(function_provider, model, "embedding")
+    validated_model = get_best_model(function_provider, embedding_ollama_host, embedding_ollama_port, model, "embedding")
 
     if function_provider == "ollama":
         logger.debug(f"Using Ollama embedding model '{validated_model}'")

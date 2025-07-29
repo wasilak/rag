@@ -31,6 +31,8 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_ENABLE_CLEANING: Enable document cleaning (default: "false")
     - RAG_EXTRACT_WISDOM: Enable Fabric wisdom extraction (default: "false")
     - RAG_FABRIC_COMMAND: Fabric command name (default: "fabric")
+    - RAG_CHUNK_SIZE: Size of text chunks for splitting (default: 600)
+    - RAG_CHUNK_OVERLAP: Overlap between chunks (default: 200)
     """
     # Create a parent parser for shared arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
@@ -60,7 +62,7 @@ def parse_arguments() -> argparse.Namespace:
                              choices=["openai", "ollama", "gemini"],
                              help="LLM provider for embedding function (env: RAG_EMBEDDING_LLM)")
     parent_parser.add_argument("--embedding-ollama-host", type=str,
-                             default=get_env_default("RAG_EMBEDDING_OLLAMA_HOST", "127.0.1"),
+                             default=get_env_default("RAG_EMBEDDING_OLLAMA_HOST", "127.0.0.1"),
                              help="Ollama host for embedding (env: RAG_EMBEDDING_OLLAMA_HOST)")
     parent_parser.add_argument("--embedding-ollama-port", type=int,
                              default=int(get_env_default("RAG_EMBEDDING_OLLAMA_PORT", 11434)),
@@ -107,6 +109,12 @@ def parse_arguments() -> argparse.Namespace:
     data_subparser.add_argument("--fabric-command", type=str,
                              default=get_env_default("RAG_FABRIC_COMMAND", "fabric"),
                              help="Fabric command name (e.g., 'fabric' or 'fabric-ai') (env: RAG_FABRIC_COMMAND)")
+    data_subparser.add_argument("--chunk-size", type=int,
+                             default=int(get_env_default("RAG_CHUNK_SIZE", "600")),
+                             help="Size of text chunks for splitting (env: RAG_CHUNK_SIZE)")
+    data_subparser.add_argument("--chunk-overlap", type=int,
+                             default=int(get_env_default("RAG_CHUNK_OVERLAP", "200")),
+                             help="Overlap between chunks (env: RAG_CHUNK_OVERLAP)")
 
     # search subcommand
     search_parser = subparsers.add_parser("search", help="Search for documents in the collection", parents=[parent_parser])

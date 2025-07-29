@@ -75,6 +75,8 @@ def main():
             clean_content=args.clean_content,
             enable_wisdom=args.extract_wisdom,
             fabric_command=args.fabric_command,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
         )
 
     elif args.subparser == "search":

@@ -104,6 +104,8 @@ def bootstrap_db(client: ClientAPI,
       source_type: str,
       bucket_name: str,
       bucket_path: str,
+      chunk_size: int = 600,
+      chunk_overlap: int = 200,
     ) -> None:
     """Bootstrap the database with documents"""
     logger.debug(f"Bootstrapping collection '{collection_name}' with {len(raw_documents)} documents")
@@ -139,8 +141,8 @@ def bootstrap_db(client: ClientAPI,
 
     logger.debug(f"Splitting {len(raw_documents)} documents into chunks")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=600,
-        chunk_overlap=200,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         length_function=len,
         is_separator_regex=False,
     )
@@ -174,7 +176,9 @@ def process_data_fill(
       bucket_path: str,
       clean_content: bool = False,
       enable_wisdom: bool = False,
-      fabric_command: str = 'fabric'
+      fabric_command: str = 'fabric',
+      chunk_size: int = 600,
+      chunk_overlap: int = 200,
     ) -> None:
     """Process data fill operation for multiple sources"""
     logger.debug(f"Filling collection '{collection_name}' with data from {source_paths}")
@@ -193,7 +197,7 @@ def process_data_fill(
             continue
 
         logger.debug(f"Bootstrapping collection '{collection_name}' with {len(documents)} documents")
-        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port,  mode, id_prefix, source_type, bucket_name, bucket_path)
+        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port,  mode, id_prefix, source_type, bucket_name, bucket_path, chunk_size, chunk_overlap)
 
     logger.debug(f"Collection '{collection_name}' has been created and filled with data.")
 
