@@ -10,7 +10,7 @@ logger = logging.getLogger("RAG")
 class DocumentCleaner:
     """Clean documents using LLM to remove ads, navigation, and obsolete content"""
 
-    def __init__(self, llm_provider: str, model: str):
+    def __init__(self, llm_provider: str, model: str, embedding_ollama_host: str, embedding_ollama_port: int):
         """Initialize document cleaner
 
         Args:
@@ -20,6 +20,8 @@ class DocumentCleaner:
         self.llm_provider = llm_provider
         self.model = get_best_model(llm_provider, model, "chat")
         self.client = self._create_llm_client()
+        self.embedding_ollama_host = embedding_ollama_host
+        self.embedding_ollama_port = embedding_ollama_port
 
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
@@ -28,7 +30,7 @@ class DocumentCleaner:
         if self.llm_provider == "ollama":
             logger.debug("Using Ollama for document cleaning")
             return OpenAI(
-                base_url='http://localhost:11434/v1',
+                base_url=f'http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1',
                 api_key='ollama',  # required, but unused
             )
         elif self.llm_provider == "gemini":

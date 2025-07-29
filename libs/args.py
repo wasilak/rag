@@ -18,8 +18,12 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_LOG_LEVEL: Log level (default: "INFO")
     - RAG_EMBEDDING_MODEL: Embedding model (default: "nomic-embed-text")
     - RAG_EMBEDDING_LLM: LLM provider for embedding function (default: "ollama")
+    - RAG_EMBEDDING_OLLAMA_HOST: Ollama host for embedding (default: "127.0.0.1")
+    - RAG_EMBEDDING_OLLAMA_PORT: Ollama port for embedding (default: 11434)
     - RAG_LLM: LLM provider (default: "ollama")
     - RAG_MODEL: LLM model for search (default: "qwen3:8b")
+    - RAG_OLLAMA_HOST: Ollama host for embedding (default: "127.0.0.1")
+    - RAG_OLLAMA_PORT: Ollama port for embedding (default: 11434)
     - RAG_SOURCE_TYPE: Source type for data-fill (default: "file")
     - RAG_MODE: Processing mode for data-fill (default: "single")
     - RAG_BUCKET_NAME: S3 bucket name for uploading markdown files (optional)
@@ -55,6 +59,18 @@ def parse_arguments() -> argparse.Namespace:
                              default=get_env_default("RAG_EMBEDDING_LLM", "ollama"),
                              choices=["openai", "ollama", "gemini"],
                              help="LLM provider for embedding function (env: RAG_EMBEDDING_LLM)")
+    parent_parser.add_argument("--embedding-ollama-host", type=str,
+                             default=get_env_default("RAG_EMBEDDING_OLLAMA_HOST", "127.0.1"),
+                             help="Ollama host for embedding (env: RAG_EMBEDDING_OLLAMA_HOST)")
+    parent_parser.add_argument("--embedding-ollama-port", type=int,
+                             default=int(get_env_default("RAG_EMBEDDING_OLLAMA_PORT", 11434)),
+                             help="Ollama port for embedding (env: RAG_EMBEDDING_OLLAMA_PORT)")
+    parent_parser.add_argument("--ollama-host", type=str,
+                             default=get_env_default("RAG_OLLAMA_HOST", "127.0.0.1"),
+                             help="Ollama host for LLM (env: RAG_OLLAMA_HOST)")
+    parent_parser.add_argument("--ollama-port", type=int,
+                             default=int(get_env_default("RAG_OLLAMA_PORT", 11434)),
+                             help="Ollama port for LLM (env: RAG_OLLAMA_PORT)")
     parent_parser.add_argument("--llm", type=str,
                              default=get_env_default("RAG_LLM", "ollama"),
                              choices=["openai", "ollama", "gemini"],
@@ -76,10 +92,11 @@ def parse_arguments() -> argparse.Namespace:
                              choices=["single", "elements"],
                              help="Mode for processing the data: 'single' for single file, 'elements' for multiple elements in a file (env: RAG_MODE)")
     data_subparser.add_argument("--cleanup", action='store_true',
+                             default=(get_env_default("RAG_CLEANUP", "false") or "false").lower() == "true",
                              help="Cleanup the collection before filling it")
-    data_subparser.add_argument("--bucket-name", type=str, default="",
+    data_subparser.add_argument("--bucket-name", type=str, default=get_env_default("RAG_BUCKET_NAME", ""),
                              help="S3 bucket name for uploading markdown files (optional)")
-    data_subparser.add_argument("--bucket-path", type=str, default="rag-knowledge-base",
+    data_subparser.add_argument("--bucket-path", type=str, default=get_env_default("RAG_BUCKET_PATH", ""),
                              help="S3 bucket path for uploading markdown files (optional)")
     data_subparser.add_argument("--clean-content", action='store_true',
                              default=(get_env_default("RAG_CLEAN_CONTENT", "false") or "false").lower() == "true",

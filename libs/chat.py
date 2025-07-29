@@ -171,7 +171,17 @@ class ChatApp(App):
     }
     """
 
-    def __init__(self, client, collection_name: str, llm: str, model: str, embedding_model: str, embedding_llm: str):
+    def __init__(
+      self,
+      client,
+      collection_name: str,
+      llm: str,
+      model: str,
+      embedding_model: str,
+      embedding_llm: str,
+      embedding_ollama_host: str,
+      embedding_ollama_port: int,
+    ):
         super().__init__()
         self.client = client
         self.collection_name = collection_name
@@ -185,6 +195,8 @@ class ChatApp(App):
         self.conversation_history: List[Dict[str, str]] = []
         self.tokenizer = self._get_tokenizer()
         self.total_tokens_used = 0
+        self.embedding_ollama_host = embedding_ollama_host
+        self.embedding_ollama_port = embedding_ollama_port
 
     def action_scroll_up(self) -> None:
         """Scroll chat history up"""
@@ -277,7 +289,7 @@ class ChatApp(App):
         self.theme = "tokyo-night"
 
         self.llm_client = self._create_llm_client()
-        self.embedding_function = set_embedding_function(self.embedding_llm, self.embedding_model)
+        self.embedding_function = set_embedding_function(self.embedding_llm, self.embedding_model, self.embedding_ollama_host, self.embedding_ollama_port)
 
         # Set text content after mounting
         self.query_one("#status", Static).update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
@@ -342,7 +354,7 @@ class ChatApp(App):
         if self.llm == "ollama":
             logger.debug("Using Ollama as LLM")
             return OpenAI(
-                base_url='http://localhost:11434/v1',
+                base_url=f'http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1',
                 api_key='ollama',  # required, but unused
             )
         elif self.llm == "gemini":
@@ -532,7 +544,16 @@ class ChatApp(App):
         self.query_one("#status", Static).update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
 
 
-def process_chat(client: ClientAPI, collection: str, llm: str, model: str, embedding_model: str, embedding_llm: str) -> None:
+def process_chat(
+      client: ClientAPI,
+      collection: str,
+      llm: str,
+      model: str,
+      embedding_model: str,
+      embedding_llm: str,
+      embedding_ollama_host: str,
+      embedding_ollama_port: int
+    ) -> None:
     """Process chat operation"""
     # Disable logging during chat to prevent UI interference
     logging.getLogger().handlers.clear()
@@ -540,7 +561,7 @@ def process_chat(client: ClientAPI, collection: str, llm: str, model: str, embed
 
     logger.debug(f"Starting chat interface for collection '{collection}'")
 
-    app = ChatApp(client, collection, llm, model, embedding_model, embedding_llm)
+    app = ChatApp(client, collection, llm, model, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port)
     app.run()
 
     logger.debug("Chat session ended")

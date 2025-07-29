@@ -48,7 +48,7 @@ def main():
       client = chromadb.PersistentClient(path=args.chromadb_path, settings=chroma_settings)
     else:
       # https://docs.trychroma.com/reference/python/client
-      client = chromadb.HttpClient(host='127.0.0.1', port=8000, settings=chroma_settings)
+      client = chromadb.HttpClient(host=args.chromadb_host, port=args.chromadb_port, settings=chroma_settings)
 
     if args.subparser == "data-fill":
         if args.cleanup:
@@ -68,6 +68,8 @@ def main():
             cleanup=args.cleanup,
             embedding_model=args.embedding_model,
             embedding_llm=args.embedding_llm,
+            embedding_ollama_host=args.embedding_ollama_host,
+            embedding_ollama_port=args.embedding_ollama_port,
             bucket_name=args.bucket_name,
             bucket_path=args.bucket_path,
             clean_content=args.clean_content,
@@ -84,7 +86,9 @@ def main():
             model=args.model,
             dry_run=args.dry_run,
             embedding_model=args.embedding_model,
-            embedding_llm=args.embedding_llm
+            embedding_llm=args.embedding_llm,
+            embedding_ollama_host=args.embedding_ollama_host,
+            embedding_ollama_port=args.embedding_ollama_port,
         )
 
     elif args.subparser == "chat":
@@ -95,6 +99,8 @@ def main():
             model=args.model,
             embedding_model=args.embedding_model,
             embedding_llm=args.embedding_llm,
+            embedding_ollama_host=args.embedding_ollama_host,
+            embedding_ollama_port=args.embedding_ollama_port,
         )
 
 

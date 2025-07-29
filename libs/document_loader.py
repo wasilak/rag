@@ -277,7 +277,14 @@ def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: boo
     return docs
 
 
-def load_documents(source_path: str, source_type: str, mode: str, clean_content: bool = False, enable_wisdom: bool = False, fabric_command: str = 'fabric') -> List[Document] | Sequence[Document]:
+def load_documents(
+      source_path: str,
+      source_type: str,
+      mode: str,
+      clean_content: bool = False,
+      enable_wisdom: bool = False,
+      fabric_command: str = 'fabric'
+    ) -> List[Document] | Sequence[Document]:
     """Load documents from file or URL.
 
     Args:

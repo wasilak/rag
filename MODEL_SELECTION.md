@@ -115,8 +115,6 @@ export RAG_LLM=openai
 export RAG_MODEL=gpt-4o-mini
 export RAG_EMBEDDING_LLM=openai
 export RAG_EMBEDDING_MODEL=text-embedding-3-small
-export RAG_CLEANING_LLM=openai
-export RAG_CLEANING_MODEL=gpt-4o-mini
 ```
 
 ## API Keys Required
@@ -208,7 +206,6 @@ The system recognizes three model types:
 
 - **chat**: Models used for text generation and conversation
 - **embedding**: Models used for text embedding and semantic search
-- **cleaning**: Models used for document cleaning (removes ads, navigation, obsolete content)
 
 Note: Document cleaning uses the same models as chat models, as it requires text generation capabilities to clean and restructure content.
 

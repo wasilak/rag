@@ -4,7 +4,7 @@ This example demonstrates how to use the new document cleaning feature in the RA
 
 ## What is Document Cleaning?
 
-Document cleaning is a preprocessing step that uses LLM models to remove unwanted content from documents before they are chunked and embedded. This is particularly useful when ingesting web content that contains:
+Document cleaning is a preprocessing step removing unwanted content from documents before they are chunked and embedded. This is particularly useful when ingesting web content that contains:
 
 - Advertisements
 - Navigation menus
@@ -23,10 +23,10 @@ Document cleaning is a preprocessing step that uses LLM models to remove unwante
 python main.py data-fill https://example.com/article --source-type url --enable-cleaning
 
 # Clean with specific model
-python main.py data-fill https://docs.python.org/3/tutorial/ --source-type url --enable-cleaning --cleaning-model "gpt-4o" --cleaning-llm openai
+python main.py data-fill https://docs.python.org/3/tutorial/ --source-type url --enable-cleaning
 
 # Clean multiple URLs
-python main.py data-fill https://site1.com https://site2.com --source-type url --enable-cleaning --cleanup
+python main.py data-fill https://site1.com https://site2.com --source-type url --enable-cleaning
 ```
 
 ### Clean Local Files
@@ -54,9 +54,6 @@ Set up cleaning defaults using environment variables:
 
 ```bash
 export RAG_ENABLE_CLEANING="true"
-export RAG_CLEANING_LLM="ollama"
-export RAG_CLEANING_MODEL="qwen3:8b"
-export RAG_CLEANING_PROMPT="Focus on technical content and remove all promotional material"
 
 # Now cleaning will be enabled by default
 python main.py data-fill https://technical-blog.com --source-type url
@@ -97,26 +94,19 @@ my_list = [1, 2, 3]
 | Option | Description | Default | Environment Variable |
 |--------|-------------|---------|---------------------|
 | `--enable-cleaning` | Enable document cleaning | false | `RAG_ENABLE_CLEANING` |
-| `--cleaning-llm` | LLM provider for cleaning | ollama | `RAG_CLEANING_LLM` |
-| `--cleaning-model` | Model for cleaning | qwen3:8b | `RAG_CLEANING_MODEL` |
-| `--cleaning-prompt` | Custom cleaning instructions | (default prompt) | `RAG_CLEANING_PROMPT` |
 
 ## Best Practices
 
 1. **Use cleaning for web content**: Web pages often contain lots of irrelevant content
-2. **Test with different models**: Some models are better at preserving technical content
-3. **Custom prompts for specialized content**: API docs, tutorials, etc. may need specific instructions
-4. **Monitor the logs**: Check reduction percentages to ensure cleaning is working properly
-5. **Compare results**: Try with and without cleaning to see the difference in search quality
+2. **Monitor the logs**: Check reduction percentages to ensure cleaning is working properly
+3. **Compare results**: Try with and without cleaning to see the difference in search quality
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **No cleaning performed**: Check that `--enable-cleaning` is set
-2. **Over-aggressive cleaning**: Try a different model or custom prompt
-3. **API errors**: Ensure your API keys are set for cloud providers
-4. **Local model not available**: Make sure Ollama is running and the model is downloaded
+2. **API errors**: Ensure your API keys are set for cloud providers
 
 ### Debug Information
 

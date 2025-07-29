@@ -92,7 +92,19 @@ def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix:
     return documents, metadata, ids
 
 
-def bootstrap_db(client: ClientAPI, collection_name: str, raw_documents, embedding_model: str, embedding_llm: str, mode: str, id_prefix: str, source_type: str, bucket_name: str, bucket_path: str, enable_cleaning: bool = False, cleaning_llm: str = "ollama", cleaning_model: str = "qwen3:8b", cleaning_prompt: Optional[str] = None) -> None:
+def bootstrap_db(client: ClientAPI,
+      collection_name: str,
+      raw_documents,
+      embedding_model: str,
+      embedding_llm: str,
+      embedding_ollama_host: str,
+      embedding_ollama_port: int,
+      mode: str,
+      id_prefix: str,
+      source_type: str,
+      bucket_name: str,
+      bucket_path: str,
+    ) -> None:
     """Bootstrap the database with documents"""
     logger.debug(f"Bootstrapping collection '{collection_name}' with {len(raw_documents)} documents")
     logger.debug(f"Using embedding model '{embedding_model}' with provider '{embedding_llm}'")
@@ -112,7 +124,7 @@ def bootstrap_db(client: ClientAPI, collection_name: str, raw_documents, embeddi
             upload_markdown_to_s3(doc.page_content, file_title, bucket_path, bucket_name)
         logger.debug("S3 upload completed")
 
-    embedding_function = set_embedding_function(embedding_llm, embedding_model)
+    embedding_function = set_embedding_function(embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port)
 
     try:
         logger.debug(f"Creating/getting collection {collection_name} with Ollama embedding function...")
@@ -147,7 +159,23 @@ def bootstrap_db(client: ClientAPI, collection_name: str, raw_documents, embeddi
     logger.debug(f"Upserted {len(documents)} documents into collection '{collection_name}'")
 
 
-def process_data_fill(client: ClientAPI, collection_name: str, source_paths: list[str], source_type: str, mode: str, cleanup: bool, embedding_model: str, embedding_llm: str, bucket_name: str, bucket_path: str, clean_content: bool = False, enable_wisdom: bool = False, fabric_command: str = 'fabric') -> None:
+def process_data_fill(
+      client: ClientAPI,
+      collection_name: str,
+      source_paths: list[str],
+      source_type: str,
+      mode: str,
+      cleanup: bool,
+      embedding_model: str,
+      embedding_llm: str,
+      embedding_ollama_host: str,
+      embedding_ollama_port: int,
+      bucket_name: str,
+      bucket_path: str,
+      clean_content: bool = False,
+      enable_wisdom: bool = False,
+      fabric_command: str = 'fabric'
+    ) -> None:
     """Process data fill operation for multiple sources"""
     logger.debug(f"Filling collection '{collection_name}' with data from {source_paths}")
 
@@ -165,7 +193,7 @@ def process_data_fill(client: ClientAPI, collection_name: str, source_paths: lis
             continue
 
         logger.debug(f"Bootstrapping collection '{collection_name}' with {len(documents)} documents")
-        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, mode, id_prefix, source_type, bucket_name, bucket_path)
+        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port,  mode, id_prefix, source_type, bucket_name, bucket_path)
 
     logger.debug(f"Collection '{collection_name}' has been created and filled with data.")
 

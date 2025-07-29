@@ -7,7 +7,7 @@ from .models import get_best_model
 logger = logging.getLogger("RAG")
 
 
-def set_embedding_function(function_provider: str, model: str) -> EmbeddingFunction:
+def set_embedding_function(function_provider: str, model: str, embedding_ollama_host:str, embedding_ollama_port: int) -> EmbeddingFunction:
     """Set up the appropriate embedding function based on the LLM provider"""
     logger.debug("Setting embedding function")
 
@@ -17,7 +17,7 @@ def set_embedding_function(function_provider: str, model: str) -> EmbeddingFunct
     if function_provider == "ollama":
         logger.debug(f"Using Ollama embedding model '{validated_model}'")
         return OllamaEmbeddingFunction(
-            url="http://localhost:11434",
+          url=f"http://{embedding_ollama_host}:{embedding_ollama_port}",
             model_name=validated_model,
         )
     elif function_provider == "openai":

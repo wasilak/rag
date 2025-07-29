@@ -105,9 +105,6 @@ Options:
 
 Document Cleaning Options:
   --enable-cleaning            Enable document cleaning to remove ads, navigation, obsolete content
-  --cleaning-llm [openai|ollama|gemini] LLM provider for cleaning (default: ollama)
-  --cleaning-model MODEL       Model for document cleaning (default: qwen3:8b)
-  --cleaning-prompt PROMPT     Custom cleaning prompt (optional)
 ```
 
 ### 🔍 Search
@@ -167,9 +164,6 @@ export RAG_EMBEDDING_MODEL="nomic-embed-text"
 
 # Document Cleaning settings
 export RAG_ENABLE_CLEANING="true"
-export RAG_CLEANING_LLM="ollama"
-export RAG_CLEANING_MODEL="qwen3:8b"
-export RAG_CLEANING_PROMPT="custom cleaning instructions..."
 
 # API Keys (if using cloud providers)
 export OPENAI_API_KEY="your-key-here"
@@ -210,8 +204,7 @@ python main.py data-fill https://docs.example.com --source-type url --enable-cle
 # Multiple files with collection reset
 python main.py data-fill *.md docs/*.md --cleanup --collection "project-docs"
 
-# Clean web content with custom model
-python main.py data-fill https://messy-website.com --source-type url --enable-cleaning --cleaning-model "gpt-4o" --cleaning-llm openai
+
 ```
 
 ### Advanced Search Queries

@@ -10,12 +10,12 @@ from .models import get_best_model
 logger = logging.getLogger("RAG")
 
 
-def create_llm_client(llm: str) -> OpenAI:
+def create_llm_client(llm: str, embedding_ollama_host: str, embedding_ollama_port: int) -> OpenAI:
     """Create LLM client based on the provider"""
     if llm == "ollama":
         logger.debug("Using Ollama as LLM")
         return OpenAI(
-            base_url='http://localhost:11434/v1',
+            base_url=f'http://{embedding_ollama_host}:{embedding_ollama_port}/v1',
             api_key='ollama',  # required, but unused
         )
     elif llm == "gemini":
@@ -118,15 +118,26 @@ def search(client_llm: OpenAI, model: str, client, collection_name: str, query: 
         print(response)
 
 
-def process_search(client: ClientAPI, collection: str, query: str, llm: str, model: str, dry_run: bool, embedding_model: str, embedding_llm: str) -> None:
+def process_search(
+      client: ClientAPI,
+      collection: str,
+      query: str,
+      llm: str,
+      model: str,
+      dry_run: bool,
+      embedding_model: str,
+      embedding_llm: str,
+      embedding_ollama_host: str,
+      embedding_ollama_port: int,
+    ) -> None:
     """Process search operation"""
     logger.debug(f"Searching collection '{collection}' with query '{query}'")
 
     # Validate and get best available model
     validated_model = get_best_model(llm, model, "chat")
 
-    client_llm = create_llm_client(llm)
-    embedding_function = set_embedding_function(embedding_llm, embedding_model)
+    client_llm = create_llm_client(llm, embedding_ollama_host, embedding_ollama_port)
+    embedding_function = set_embedding_function(embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port)
 
     search(client_llm, validated_model, client, collection, query, dry_run, embedding_function)
     logger.debug("Search completed")
