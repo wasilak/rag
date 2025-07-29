@@ -44,8 +44,8 @@ def main():
         anonymized_telemetry=False
     )
 
-    if len(args.db_path) > 0:
-      client = chromadb.PersistentClient(path=args.db_path, settings=chroma_settings)
+    if len(args.chromadb_path) > 0:
+      client = chromadb.PersistentClient(path=args.chromadb_path, settings=chroma_settings)
     else:
       # https://docs.trychroma.com/reference/python/client
       client = chromadb.HttpClient(host='127.0.0.1', port=8000, settings=chroma_settings)
