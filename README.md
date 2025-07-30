@@ -268,24 +268,31 @@ This project stands on the shoulders of giants! Massive thanks to these incredib
 - **[ChromaDB](https://www.trychroma.com/)** - The AI-native open-source vector database that makes this all possible
 - **[LangChain](https://github.com/langchain-ai/langchain)** - For document loading, text splitting, and processing magic
 - **[Textual](https://github.com/Textualize/textual)** - The amazing Python framework powering our beautiful chat interface
+- **[FastAPI](https://fastapi.tiangolo.com/)** - High-performance async web framework for ChromaDB server
 
 ### 🤖 **AI & ML**
 
 - **[OpenAI](https://openai.com/)** - For GPT models and embeddings
 - **[Ollama](https://ollama.ai/)** - Making local LLM deployment effortless
 - **[Google AI](https://ai.google/)** - For Gemini models and embeddings
+- **[Nomic](https://nomic.ai/)** - High-quality open source embeddings
+- **[Fabric AI](https://docs.fabric.ai/)** - AI-powered wisdom extraction and knowledge mining
 
 ### 🛠️ **Document Processing**
 
 - **[Unstructured](https://github.com/Unstructured-IO/unstructured)** - Fantastic document parsing and structure extraction
 - **[Markdownify](https://github.com/matthewwithanm/python-markdownify)** - Clean HTML to Markdown conversion
-- **[Firecrawl](https://www.firecrawl.dev/)** - Intelligent web content extraction
+- **[Trafilatura](https://trafilatura.readthedocs.io/)** - Advanced web content extraction
 - **[NLTK](https://www.nltk.org/)** - Natural language processing toolkit
+- **[Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/)** - HTML parsing and cleaning
+- **[boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)** - AWS SDK for S3 integration
 
 ### 🎨 **User Experience**
 
 - **[Rich](https://github.com/Textualize/rich)** - Beautiful, colorful terminal output
 - **[Python-dotenv](https://github.com/theskumar/python-dotenv)** - Environment variable management
+- **[colorlog](https://github.com/borntyping/python-colorlog)** - Colored log output formatting
+- **[httpx](https://www.python-httpx.org/)** - Modern HTTP client for API interactions
 
 ## 🤝 Contributing
 
