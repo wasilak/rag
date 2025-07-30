@@ -47,11 +47,16 @@ A powerful, flexible RAG (Retrieval-Augmented Generation) system that turns your
 ### Installation
 
 ```bash
+# Install uv package manager (if not installed)
+curl -LsSf https://raw.githubusercontent.com/astral-sh/uv/main/install.sh | sh
+
 # Clone the repository
 git clone <repository-url>
 cd rag
 
 # Install dependencies (requires Python 3.12+)
+uv venv
+source .venv/bin/activate  # or .venv/Scripts/activate on Windows
 uv sync
 ```
 
@@ -67,10 +72,16 @@ python main.py data-fill examples/markdown.md
 python main.py data-fill https://example.com/docs --source-type url
 
 # Add web content with cleaning (removes ads, navigation, etc.)
-python main.py data-fill https://example.com/docs --source-type url --enable-cleaning
+python main.py data-fill https://example.com/docs --source-type url --clean-content
 
-# Batch process multiple files
-python main.py data-fill docs/*.md --cleanup
+# Configure chunk size and overlap for better context
+python main.py data-fill docs/*.md --chunk-size 800 --chunk-overlap 200
+
+# Extract wisdom using Fabric AI
+python main.py data-fill docs/*.md --extract-wisdom
+
+# Upload processed markdown to S3
+python main.py data-fill docs/*.md --bucket-name my-docs --bucket-path rag/
 ```
 
 2️⃣ **Search your documents:**
@@ -102,9 +113,21 @@ Options:
   --embedding-model MODEL      Embedding model (default: nomic-embed-text)
   --embedding-llm [openai|ollama|gemini] Embedding LLM provider (default: ollama)
   --llm [openai|ollama|gemini] LLM provider (default: ollama)
+  --chromadb-host HOST        ChromaDB server host (default: 127.0.0.1)
+  --chromadb-port PORT        ChromaDB server port (default: 8000)
+  --ollama-host HOST          Ollama server host (default: 127.0.0.1)
+  --ollama-port PORT          Ollama server port (default: 11434)
 
-Document Cleaning Options:
-  --enable-cleaning            Enable document cleaning to remove ads, navigation, obsolete content
+Document Processing Options:
+  --clean-content             Clean document content by removing ads, navigation, etc.
+  --extract-wisdom            Extract wisdom using Fabric AI
+  --fabric-command CMD        Fabric command name (default: fabric)
+  --chunk-size SIZE          Size of text chunks (default: 600)
+  --chunk-overlap SIZE       Overlap between chunks (default: 200)
+
+S3 Storage Options:
+  --bucket-name NAME          S3 bucket name for markdown storage
+  --bucket-path PATH         S3 bucket path prefix
 ```
 
 ### 🔍 Search
@@ -154,16 +177,32 @@ export RAG_COLLECTION="my-docs"
 export RAG_DB_PATH="./vectordb"
 export RAG_LOG_LEVEL="INFO"
 
+# ChromaDB Server settings (for HTTP client)
+export RAG_CHROMADB_HOST="127.0.0.1"
+export RAG_CHROMADB_PORT="8000"
+
 # LLM Configuration
 export RAG_LLM="ollama"
 export RAG_MODEL="qwen3:8b"
+export RAG_OLLAMA_HOST="127.0.0.1"
+export RAG_OLLAMA_PORT="11434"
 
 # Embedding settings
 export RAG_EMBEDDING_LLM="ollama"
 export RAG_EMBEDDING_MODEL="nomic-embed-text"
+export RAG_EMBEDDING_OLLAMA_HOST="127.0.0.1"
+export RAG_EMBEDDING_OLLAMA_PORT="11434"
 
-# Document Cleaning settings
-export RAG_ENABLE_CLEANING="true"
+# Document Processing settings
+export RAG_CLEAN_CONTENT="true"
+export RAG_EXTRACT_WISDOM="false"
+export RAG_FABRIC_COMMAND="fabric"
+export RAG_CHUNK_SIZE="600"
+export RAG_CHUNK_OVERLAP="200"
+
+# S3 Storage settings
+export RAG_BUCKET_NAME="my-docs"
+export RAG_BUCKET_PATH="rag/"
 
 # API Keys (if using cloud providers)
 export OPENAI_API_KEY="your-key-here"
