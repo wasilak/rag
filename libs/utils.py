@@ -21,11 +21,22 @@ def format_footnotes(metadatas: list[dict]) -> str:
             numbered.append((title.strip(), source.strip()))
 
     # Format into footnotes
-    result = "\n".join([f"[{i+1}] \"{title}\", `{source}`" for i, (title, source) in enumerate(numbered)])
+    result = "\n".join(
+        [
+            f'[{i + 1}] "{title}", `{source}`'
+            for i, (title, source) in enumerate(numbered)
+        ]
+    )
     return result
 
 
-def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_theme: str = "monokai", borders_only: str = "all"):
+def print_fancy_markdown(
+    md: str,
+    title: str,
+    border_style: str = "green",
+    code_theme: str = "monokai",
+    borders_only: str = "all",
+):
     """
     Render markdown with:
     - Styled headings
@@ -36,14 +47,16 @@ def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_
         borders_only: "all" for full borders, "top_bottom" for top/bottom only
     """
     # Define a default custom theme for markdown
-    custom_theme = Theme({
-        "markdown.h1": "bold cyan",
-        "markdown.h2": "bold magenta",
-        "markdown.h3": "bold green",
-        "markdown.code": "bright_white on dark_green",
-        "markdown.block_quote": "italic yellow",
-        "markdown.list_item": "white",
-    })
+    custom_theme = Theme(
+        {
+            "markdown.h1": "bold cyan",
+            "markdown.h2": "bold magenta",
+            "markdown.h3": "bold green",
+            "markdown.code": "bright_white on dark_green",
+            "markdown.block_quote": "italic yellow",
+            "markdown.list_item": "white",
+        }
+    )
 
     console = Console(theme=custom_theme, highlight=True)
 
@@ -53,17 +66,21 @@ def print_fancy_markdown(md: str, title: str, border_style: str = "green", code_
     if borders_only == "top_bottom":
         # Use simple horizontal separators instead of full panel borders
         from rich.rule import Rule
+
         console.print(Rule(title, style=border_style))
         console.print(md_render)
         console.print(Rule(style=border_style))
     else:
         # Use default full borders
-        console.print(Panel(md_render, title=title, border_style=border_style, expand=True))
+        console.print(
+            Panel(md_render, title=title, border_style=border_style, expand=True)
+        )
+
 
 def sanitize_title(title: str) -> str:
     """
     Sanitize a title by replacing special characters and spaces with underscores.
     Also ensures the title is lowercase.
     """
-    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', title)
+    sanitized = re.sub(r"[^a-zA-Z0-9]", "_", title)
     return sanitized.lower() if sanitized else "untitled"

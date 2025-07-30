@@ -1,4 +1,5 @@
 """Wisdom extraction module using Fabric."""
+
 import logging
 import shutil
 import subprocess
@@ -7,7 +8,7 @@ from typing import Optional
 logger = logging.getLogger("RAG")
 
 
-def check_fabric_installed(command: str = 'fabric') -> bool:
+def check_fabric_installed(command: str = "fabric") -> bool:
     """Check if Fabric command is available in PATH
 
     Args:
@@ -16,7 +17,7 @@ def check_fabric_installed(command: str = 'fabric') -> bool:
     return shutil.which(command) is not None
 
 
-def extract_wisdom(content: str, fabric_command: str = 'fabric') -> Optional[str]:
+def extract_wisdom(content: str, fabric_command: str = "fabric") -> Optional[str]:
     """Extract wisdom from content using Fabric.
 
     Args:
@@ -27,16 +28,15 @@ def extract_wisdom(content: str, fabric_command: str = 'fabric') -> Optional[str
         Extracted wisdom as markdown text, or None if extraction failed or Fabric not found
     """
     if not check_fabric_installed(fabric_command):
-        logger.warning(f"Fabric command '{fabric_command}' not found. Skipping wisdom extraction.")
+        logger.warning(
+            f"Fabric command '{fabric_command}' not found. Skipping wisdom extraction."
+        )
         return None
 
     try:
         # Echo content to Fabric through stdin
         result = subprocess.run(
-            [fabric_command],
-            input=content,
-            capture_output=True,
-            text=True
+            [fabric_command], input=content, capture_output=True, text=True
         )
 
         if result.returncode == 0 and result.stdout:
@@ -57,7 +57,13 @@ def extract_wisdom(content: str, fabric_command: str = 'fabric') -> Optional[str
         return None
 
 
-def format_content(content: str, base_title: str, display_title: str, wisdom: str = "", bucket_path: str = "") -> tuple[str, str]:
+def format_content(
+    content: str,
+    base_title: str,
+    display_title: str,
+    wisdom: str = "",
+    bucket_path: str = "",
+) -> tuple[str, str]:
     """Format content for files.
 
     Args:
@@ -74,11 +80,19 @@ def format_content(content: str, base_title: str, display_title: str, wisdom: st
     """
     if wisdom:
         # When wisdom is extracted, create both versions with cross-links
-        original_link_path = f"{bucket_path}/original/{base_title}_original" if bucket_path else f"original/{base_title}_original"
-        wisdom_link_path = f"{bucket_path}/{base_title}" if bucket_path else f"{base_title}"
+        original_link_path = (
+            f"{bucket_path}/original/{base_title}_original"
+            if bucket_path
+            else f"original/{base_title}_original"
+        )
+        wisdom_link_path = (
+            f"{bucket_path}/{base_title}" if bucket_path else f"{base_title}"
+        )
 
         # Create links with display text
-        wisdom_content = f"{wisdom.strip()}\n\n[[{original_link_path}|{base_title}_original]]"
+        wisdom_content = (
+            f"{wisdom.strip()}\n\n[[{original_link_path}|{base_title}_original]]"
+        )
         original_content = f"{content.strip()}\n\n[[{wisdom_link_path}|{base_title}]]"
         return wisdom_content, original_content
     else:

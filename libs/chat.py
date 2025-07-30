@@ -27,13 +27,14 @@ class ChatMessage(Static):
     }
     """
 
-    def __init__(self, content: str, is_user: bool = True, model_name: str = "", **kwargs) -> None:
+    def __init__(
+        self, content: str, is_user: bool = True, model_name: str = "", **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         self.content = content
         self.is_user = is_user
         self.model_name = model_name
         self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-
 
     def on_mount(self) -> None:
         """Set up the message display"""
@@ -42,23 +43,23 @@ class ChatMessage(Static):
         from rich.style import Style
 
         # Create header with timestamp
-        user_info = "👤 User" if self.is_user else f"🤖 {self.model_name}" if self.model_name else "🤖 Bot"
+        user_info = (
+            "👤 User"
+            if self.is_user
+            else f"🤖 {self.model_name}" if self.model_name else "🤖 Bot"
+        )
         header = f"{self.timestamp} {user_info}"
 
         # Create markdown rendered content
         style = Style(color="white")
-        markdown_content = Markdown(
-            self.content,
-            code_theme="monokai",
-            style=style
-        )
+        markdown_content = Markdown(self.content, code_theme="monokai", style=style)
 
         # Combine header with markdown content in a panel
         panel = Panel(
             markdown_content,
             title=header,
             border_style="bright_blue" if self.is_user else "green",
-            padding=(0, 1)
+            padding=(0, 1),
         )
         self.update(panel)
 
@@ -70,7 +71,9 @@ class ChatHistory(ScrollableContainer):
         super().__init__(**kwargs)
         self.can_focus = True  # Allow focus for scrolling
 
-    def add_message(self, content: str, is_user: bool = True, model_name: str = "") -> None:
+    def add_message(
+        self, content: str, is_user: bool = True, model_name: str = ""
+    ) -> None:
         """Add a new message to the chat history"""
         message = ChatMessage(content, is_user, model_name)
         self.mount(message)
@@ -172,22 +175,24 @@ class ChatApp(App):
     """
 
     def __init__(
-      self,
-      client,
-      collection_name: str,
-      llm: str,
-      model: str,
-      embedding_model: str,
-      embedding_llm: str,
-      embedding_ollama_host: str,
-      embedding_ollama_port: int,
+        self,
+        client,
+        collection_name: str,
+        llm: str,
+        model: str,
+        embedding_model: str,
+        embedding_llm: str,
+        embedding_ollama_host: str,
+        embedding_ollama_port: int,
     ):
         super().__init__()
         self.client = client
         self.collection_name = collection_name
         self.llm = llm
         # Validate and get best available model
-        self.model = get_best_model(llm, embedding_ollama_host, embedding_ollama_port, model, "chat")
+        self.model = get_best_model(
+            llm, embedding_ollama_host, embedding_ollama_port, model, "chat"
+        )
         self.embedding_model = embedding_model
         self.embedding_llm = embedding_llm
         self.llm_client = None
@@ -235,7 +240,9 @@ class ChatApp(App):
         self.conversation_history.clear()
         self.total_tokens_used = 0
         self._update_token_display()
-        self.query_one("#status", Static).update(f"Chat cleared. Ready to chat with {self.model}!")
+        self.query_one("#status", Static).update(
+            f"Chat cleared. Ready to chat with {self.model}!"
+        )
 
     def action_show_info(self) -> None:
         """Show chat information"""
@@ -289,10 +296,17 @@ class ChatApp(App):
         self.theme = "tokyo-night"
 
         self.llm_client = self._create_llm_client()
-        self.embedding_function = set_embedding_function(self.embedding_llm, self.embedding_model, self.embedding_ollama_host, self.embedding_ollama_port)
+        self.embedding_function = set_embedding_function(
+            self.embedding_llm,
+            self.embedding_model,
+            self.embedding_ollama_host,
+            self.embedding_ollama_port,
+        )
 
         # Set text content after mounting
-        self.query_one("#status", Static).update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
+        self.query_one("#status", Static).update(
+            f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send"
+        )
 
         # Initialize token display
         self._update_token_display()
@@ -340,7 +354,7 @@ class ChatApp(App):
         return {
             "total": total_tokens,
             "user": user_tokens,
-            "assistant": assistant_tokens
+            "assistant": assistant_tokens,
         }
 
     def _update_token_display(self):
@@ -354,14 +368,14 @@ class ChatApp(App):
         if self.llm == "ollama":
             logger.debug("Using Ollama as LLM")
             return OpenAI(
-                base_url=f'http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1',
-                api_key='ollama',  # required, but unused
+                base_url=f"http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1",
+                api_key="ollama",  # required, but unused
             )
         elif self.llm == "gemini":
             logger.debug("Using Gemini as LLM")
             return OpenAI(
                 api_key=os.getenv("GEMINI_API_KEY"),
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
         else:
             logger.debug("Using OpenAI as LLM")
@@ -427,14 +441,10 @@ class ChatApp(App):
 
             # Search for relevant documents
             collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                embedding_function=self.embedding_function
+                name=self.collection_name, embedding_function=self.embedding_function
             )
 
-            results = collection.query(
-                query_texts=[user_message],
-                n_results=4
-            )
+            results = collection.query(query_texts=[user_message], n_results=4)
 
             # Build system prompt with context
             system_prompt = self._build_system_prompt(results)
@@ -445,13 +455,15 @@ class ChatApp(App):
 
             # Check if llm_client is None
             if self.llm_client is None:
-                self.call_from_thread(self._update_chat_with_response, "Error: LLM client not initialized.")
+                self.call_from_thread(
+                    self._update_chat_with_response,
+                    "Error: LLM client not initialized.",
+                )
                 return
 
             # Generate response
             response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=messages  # type: ignore
+                model=self.model, messages=messages  # type: ignore
             )
 
             if response.choices:
@@ -460,14 +472,24 @@ class ChatApp(App):
                 # Ensure assistant_message is not None
                 if assistant_message is not None:
                     # Add to conversation history
-                    self.conversation_history.append({"role": "assistant", "content": assistant_message})
+                    self.conversation_history.append(
+                        {"role": "assistant", "content": assistant_message}
+                    )
 
                     # Update UI in main thread
-                    self.call_from_thread(self._update_chat_with_response, assistant_message)
+                    self.call_from_thread(
+                        self._update_chat_with_response, assistant_message
+                    )
                 else:
-                    self.call_from_thread(self._update_chat_with_response, "Sorry, I received an empty response.")
+                    self.call_from_thread(
+                        self._update_chat_with_response,
+                        "Sorry, I received an empty response.",
+                    )
             else:
-                self.call_from_thread(self._update_chat_with_response, "Sorry, I couldn't generate a response.")
+                self.call_from_thread(
+                    self._update_chat_with_response,
+                    "Sorry, I couldn't generate a response.",
+                )
 
         except Exception as e:
             logger.error(f"Error generating response: {e}")
@@ -524,7 +546,7 @@ class ChatApp(App):
                 metadata_entry = results["metadatas"][0][i]
                 footnotes_metadata.append(metadata_entry)
 
-                system_prompt += f"{i + 1}. \"{item}\"\n"
+                system_prompt += f'{i + 1}. "{item}"\n'
                 system_prompt += f"metadata: {metadata_entry}\n\n"
 
         # Format footnotes from metadata
@@ -541,19 +563,21 @@ class ChatApp(App):
         # Update token display
         self._update_token_display()
 
-        self.query_one("#status", Static).update(f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send")
+        self.query_one("#status", Static).update(
+            f"🤖 Model: {self.model} | 📚 Collection: {self.collection_name} | 💬 Ready to chat! Press Ctrl+Enter to send"
+        )
 
 
 def process_chat(
-      client: ClientAPI,
-      collection: str,
-      llm: str,
-      model: str,
-      embedding_model: str,
-      embedding_llm: str,
-      embedding_ollama_host: str,
-      embedding_ollama_port: int
-    ) -> None:
+    client: ClientAPI,
+    collection: str,
+    llm: str,
+    model: str,
+    embedding_model: str,
+    embedding_llm: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+) -> None:
     """Process chat operation"""
     # Disable logging during chat to prevent UI interference
     logging.getLogger().handlers.clear()
@@ -561,7 +585,16 @@ def process_chat(
 
     logger.debug(f"Starting chat interface for collection '{collection}'")
 
-    app = ChatApp(client, collection, llm, model, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port)
+    app = ChatApp(
+        client,
+        collection,
+        llm,
+        model,
+        embedding_model,
+        embedding_llm,
+        embedding_ollama_host,
+        embedding_ollama_port,
+    )
     app.run()
 
     logger.debug("Chat session ended")

@@ -1,7 +1,10 @@
 import re
 import boto3
 
-def upload_markdown_to_s3(markdown_content: str, title: str, folder: str, bucket_name: str) -> None:
+
+def upload_markdown_to_s3(
+    markdown_content: str, title: str, folder: str, bucket_name: str
+) -> None:
     """
     Sanitizes a title, and uploads markdown content to an S3 bucket within a specified folder.
 
@@ -12,7 +15,7 @@ def upload_markdown_to_s3(markdown_content: str, title: str, folder: str, bucket
         bucket_name (str): The name of the S3 bucket.
     """
     # Sanitize title by replacing special characters and spaces with underscore
-    sanitized_title = re.sub(r'[^a-zA-Z0-9]', '_', title)
+    sanitized_title = re.sub(r"[^a-zA-Z0-9]", "_", title)
 
     # Ensure the title is not empty after sanitization
     if not sanitized_title:
@@ -27,7 +30,7 @@ def upload_markdown_to_s3(markdown_content: str, title: str, folder: str, bucket
 
     try:
         # Initialize S3 client. boto3 automatically handles the standard credential chain.
-        s3 = boto3.client('s3')
+        s3 = boto3.client("s3")
 
         # Upload the file
         s3.put_object(Bucket=bucket_name, Key=s3_key, Body=markdown_content)

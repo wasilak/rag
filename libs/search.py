@@ -10,26 +10,36 @@ from .search_orchestrator import SearchOrchestrator
 logger = logging.getLogger("RAG")
 
 
-def create_llm_client(llm: str, embedding_ollama_host: str, embedding_ollama_port: int) -> OpenAI:
+def create_llm_client(
+    llm: str, embedding_ollama_host: str, embedding_ollama_port: int
+) -> OpenAI:
     """Create LLM client based on the provider"""
     if llm == "ollama":
         logger.debug("Using Ollama as LLM")
         return OpenAI(
-            base_url=f'http://{embedding_ollama_host}:{embedding_ollama_port}/v1',
-            api_key='ollama',  # required, but unused
+            base_url=f"http://{embedding_ollama_host}:{embedding_ollama_port}/v1",
+            api_key="ollama",  # required, but unused
         )
     elif llm == "gemini":
         logger.debug("Using Gemini as LLM")
         return OpenAI(
             api_key=os.getenv("GEMINI_API_KEY"),
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         )
     else:
         logger.debug("Using OpenAI as LLM")
         return OpenAI()
 
 
-def search(client_llm: OpenAI, model: str, client: ClientAPI, collection_name: str, query: str, dry_run: bool, embedding_function) -> None:
+def search(
+    client_llm: OpenAI,
+    model: str,
+    client: ClientAPI,
+    collection_name: str,
+    query: str,
+    dry_run: bool,
+    embedding_function,
+) -> None:
     # Initialize search orchestrator
     orchestrator = SearchOrchestrator(
         client=client,
@@ -37,7 +47,7 @@ def search(client_llm: OpenAI, model: str, client: ClientAPI, collection_name: s
         collection_name=collection_name,
         embedding_function=embedding_function,
         model=model,
-        debug=logger.isEnabledFor(logging.DEBUG)
+        debug=logger.isEnabledFor(logging.DEBUG),
     )
 
     # Perform iterative search
@@ -97,12 +107,12 @@ def search(client_llm: OpenAI, model: str, client: ClientAPI, collection_name: s
     footnotes_metadata = []
 
     # Check if documents and metadatas are not None
-    if results['documents'] and results['metadatas']:
-        for i, item in enumerate(results['documents'][0]):
-            metadata_entry = results['metadatas'][0][i]
+    if results["documents"] and results["metadatas"]:
+        for i, item in enumerate(results["documents"][0]):
+            metadata_entry = results["metadatas"][0][i]
             footnotes_metadata.append(metadata_entry)
 
-            system_prompt += f"{i + 1}. \"{item}\"\n"
+            system_prompt += f'{i + 1}. "{item}"\n'
             system_prompt += f"metadata: {metadata_entry}\n\n"
 
     # Format footnotes from metadata
@@ -111,7 +121,12 @@ def search(client_llm: OpenAI, model: str, client: ClientAPI, collection_name: s
 
     # print(system_prompt)
     if logger.isEnabledFor(logging.DEBUG):
-      print_fancy_markdown(system_prompt, "📝 System Prompt", border_style="blue", borders_only="top_bottom")
+        print_fancy_markdown(
+            system_prompt,
+            "📝 System Prompt",
+            border_style="blue",
+            borders_only="top_bottom",
+        )
 
     if dry_run:
         exit(0)
@@ -120,38 +135,56 @@ def search(client_llm: OpenAI, model: str, client: ClientAPI, collection_name: s
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
-        ]
+            {"role": "user", "content": query},
+        ],
     )
 
     if len(response.choices) > 0:
-        markdown_content = response.choices[0].message.content if response.choices[0].message.content else "No content returned"
-        print_fancy_markdown(markdown_content, "🤖 Agent Reply", borders_only="top_bottom")
+        markdown_content = (
+            response.choices[0].message.content
+            if response.choices[0].message.content
+            else "No content returned"
+        )
+        print_fancy_markdown(
+            markdown_content, "🤖 Agent Reply", borders_only="top_bottom"
+        )
     else:
         print("No response from OpenAI API")
         print(response)
 
 
 def process_search(
-      client: ClientAPI,
-      collection: str,
-      query: str,
-      llm: str,
-      model: str,
-      dry_run: bool,
-      embedding_model: str,
-      embedding_llm: str,
-      embedding_ollama_host: str,
-      embedding_ollama_port: int,
-    ) -> None:
+    client: ClientAPI,
+    collection: str,
+    query: str,
+    llm: str,
+    model: str,
+    dry_run: bool,
+    embedding_model: str,
+    embedding_llm: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+) -> None:
     """Process search operation"""
     logger.debug(f"Searching collection '{collection}' with query '{query}'")
 
     # Validate and get best available model
-    validated_model = get_best_model(llm, embedding_ollama_host, embedding_ollama_port, model, "chat")
+    validated_model = get_best_model(
+        llm, embedding_ollama_host, embedding_ollama_port, model, "chat"
+    )
 
     client_llm = create_llm_client(llm, embedding_ollama_host, embedding_ollama_port)
-    embedding_function = set_embedding_function(embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port)
+    embedding_function = set_embedding_function(
+        embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
+    )
 
-    search(client_llm, validated_model, client, collection, query, dry_run, embedding_function)
+    search(
+        client_llm,
+        validated_model,
+        client,
+        collection,
+        query,
+        dry_run,
+        embedding_function,
+    )
     logger.debug("Search completed")

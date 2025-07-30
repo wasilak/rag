@@ -1,9 +1,13 @@
 """Document loading and processing module."""
+
 import os
 import logging
 from typing import List, Sequence
 from langchain_core.documents import Document
-from langchain_community.document_loaders import UnstructuredMarkdownLoader, AsyncHtmlLoader
+from langchain_community.document_loaders import (
+    UnstructuredMarkdownLoader,
+    AsyncHtmlLoader,
+)
 from .validation import validate_url, validate_path, validate_file, validate_directory
 from langchain_community.document_transformers import MarkdownifyTransformer
 from bs4 import BeautifulSoup
@@ -44,12 +48,14 @@ def load_directory_documents(directory: str, mode: str) -> List[Document]:
     logger.debug(f"Processing directory {directory} recursively")
     documents = []
     for root, _, files in os.walk(directory):
-        markdown_files = [f for f in files if f.lower().endswith(('.md', '.markdown'))]
+        markdown_files = [f for f in files if f.lower().endswith((".md", ".markdown"))]
         for file in markdown_files:
             file_path = os.path.join(root, file)
             docs = load_file_document(file_path, mode)
             documents.extend(docs)
-    logger.debug(f"Loaded total of {len(documents)} documents from directory {directory}")
+    logger.debug(
+        f"Loaded total of {len(documents)} documents from directory {directory}"
+    )
     return documents
 
 
@@ -89,16 +95,47 @@ def clean_html_content(raw_html: str) -> str:
     """
     soup = BeautifulSoup(raw_html, "html.parser")
     # Remove unwanted tags typical for online publications
-    for tag in soup.find_all([
-        'nav', 'header', 'footer', 'aside', 'script', 'style', 'noscript', 'form', 'dialog', 'menu', 'iframe',
-        'template', 'banner', 'search', 'toolbar', 'menubar', 'contentinfo', 'complementary', 'advertisement',
-        'comments', 'sidebar', 'cookie', 'popup', 'modal', 'social', 'share', 'newsletter', 'widget',
-        'promotion', 'ad', 'subscribe', 'related', 'recommended'
-    ]):
+    for tag in soup.find_all(
+        [
+            "nav",
+            "header",
+            "footer",
+            "aside",
+            "script",
+            "style",
+            "noscript",
+            "form",
+            "dialog",
+            "menu",
+            "iframe",
+            "template",
+            "banner",
+            "search",
+            "toolbar",
+            "menubar",
+            "contentinfo",
+            "complementary",
+            "advertisement",
+            "comments",
+            "sidebar",
+            "cookie",
+            "popup",
+            "modal",
+            "social",
+            "share",
+            "newsletter",
+            "widget",
+            "promotion",
+            "ad",
+            "subscribe",
+            "related",
+            "recommended",
+        ]
+    ):
         tag.decompose()
     # Keep only main content tags if present
     main_content = None
-    for main_tag in ['article', 'main']:
+    for main_tag in ["article", "main"]:
         main_content = soup.find(main_tag)
         if main_content:
             break
@@ -107,7 +144,9 @@ def clean_html_content(raw_html: str) -> str:
     return str(soup)
 
 
-def process_html_documents(docs: List[Document], clean_content: bool = False) -> List[Document]:
+def process_html_documents(
+    docs: List[Document], clean_content: bool = False
+) -> List[Document]:
     """Process HTML documents with optional cleaning.
 
     Args:
@@ -125,10 +164,18 @@ def process_html_documents(docs: List[Document], clean_content: bool = False) ->
             doc.page_content = cleaned_html
             cleaned_docs.append(doc)
         total_cleaned = sum(len(doc.page_content) for doc in cleaned_docs)
-        reduction_percent = ((total_original - total_cleaned) / total_original * 100) if total_original > 0 else 0
-        logger.info(f"HTML tags and UI elements removed before Markdown conversion. Content reduced from {total_original} to {total_cleaned} chars ({reduction_percent:.1f}% reduction).")
+        reduction_percent = (
+            ((total_original - total_cleaned) / total_original * 100)
+            if total_original > 0
+            else 0
+        )
+        logger.info(
+            f"HTML tags and UI elements removed before Markdown conversion. Content reduced from {total_original} to {total_cleaned} chars ({reduction_percent:.1f}% reduction)."
+        )
     else:
-        logger.info("Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning.")
+        logger.info(
+            "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
+        )
         cleaned_docs = docs
 
     return cleaned_docs
@@ -145,13 +192,50 @@ def convert_to_markdown(docs: List[Document]) -> Sequence[Document]:
     """
     logger.debug("Configuring Markdownify transformer")
     md = MarkdownifyTransformer(
-        strip=['script', 'style', 'meta', 'link', 'iframe', 'button', 'input', 'select', 'textarea'],
-        remove=['nav', 'header', 'footer', 'aside', 'noscript', 'head',
-               'template', 'dialog', 'menu', 'form', 'banner', 'search',
-               'toolbar', 'menubar', 'contentinfo', 'complementary',
-               'advertisement', 'comments', 'sidebar', 'cookie', 'popup',
-               'modal', 'social', 'share', 'newsletter', 'widget',
-               'promotion', 'ad', 'subscribe', 'related', 'recommended'],
+        strip=[
+            "script",
+            "style",
+            "meta",
+            "link",
+            "iframe",
+            "button",
+            "input",
+            "select",
+            "textarea",
+        ],
+        remove=[
+            "nav",
+            "header",
+            "footer",
+            "aside",
+            "noscript",
+            "head",
+            "template",
+            "dialog",
+            "menu",
+            "form",
+            "banner",
+            "search",
+            "toolbar",
+            "menubar",
+            "contentinfo",
+            "complementary",
+            "advertisement",
+            "comments",
+            "sidebar",
+            "cookie",
+            "popup",
+            "modal",
+            "social",
+            "share",
+            "newsletter",
+            "widget",
+            "promotion",
+            "ad",
+            "subscribe",
+            "related",
+            "recommended",
+        ],
         heading_style="ATX",
         bullets="-",
         wrap=0,
@@ -162,7 +246,7 @@ def convert_to_markdown(docs: List[Document]) -> Sequence[Document]:
         code_language="",
         default_title=True,
         newline_style="\n",
-        keep_formatting=True
+        keep_formatting=True,
     )
     return md.transform_documents(docs)
 
@@ -177,16 +261,18 @@ def extract_title_from_html(content: str) -> str:
         Extracted title or 'untitled'
     """
     soup = BeautifulSoup(content, "html.parser")
-    title_tag = soup.find('title')
+    title_tag = soup.find("title")
     if title_tag and title_tag.get_text(strip=True):
         return title_tag.get_text(strip=True)
-    h1_tag = soup.find('h1')
+    h1_tag = soup.find("h1")
     if h1_tag and h1_tag.get_text(strip=True):
         return h1_tag.get_text(strip=True)
     return "untitled"
 
 
-def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> Sequence[Document]:
+def process_wisdom_extraction(
+    docs: Sequence[Document], fabric_command: str
+) -> Sequence[Document]:
     """Process wisdom extraction for documents.
 
     Args:
@@ -199,7 +285,9 @@ def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> 
     from .wisdom import check_fabric_installed
 
     if not check_fabric_installed(fabric_command):
-        logger.warning(f"Fabric command '{fabric_command}' not found. Continuing without wisdom extraction.")
+        logger.warning(
+            f"Fabric command '{fabric_command}' not found. Continuing without wisdom extraction."
+        )
         return docs
 
     logger.info("Fabric command found, proceeding with wisdom extraction")
@@ -220,19 +308,21 @@ def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> 
             else:
                 sanitized_title = base_title
             bucket_path = doc.metadata.get("bucket_path", "")
-            wisdom_content, original_content = format_content(doc.page_content, sanitized_title, display_title, wisdom, bucket_path)
+            wisdom_content, original_content = format_content(
+                doc.page_content, sanitized_title, display_title, wisdom, bucket_path
+            )
 
             # Create wisdom document
             wisdom_doc = Document(
                 page_content=wisdom_content,
-                metadata={**doc.metadata, "is_wisdom": True}
+                metadata={**doc.metadata, "is_wisdom": True},
             )
             processed_docs.append(wisdom_doc)
 
             # Create original document
             original_doc = Document(
                 page_content=original_content,
-                metadata={**doc.metadata, "is_original": True}
+                metadata={**doc.metadata, "is_original": True},
             )
             processed_docs.append(original_doc)
             logger.info("Created wisdom and original versions of the document")
@@ -240,12 +330,19 @@ def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> 
             # If wisdom extraction fails, use original content
             doc.page_content = doc.page_content.strip()
             processed_docs.append(doc)
-            logger.warning("Failed to extract wisdom, continuing with original content only")
+            logger.warning(
+                "Failed to extract wisdom, continuing with original content only"
+            )
 
     return processed_docs
 
 
-def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: bool = False, fabric_command: str = 'fabric') -> Sequence[Document]:
+def load_url_documents(
+    url: str,
+    clean_content: bool = False,
+    enable_wisdom: bool = False,
+    fabric_command: str = "fabric",
+) -> Sequence[Document]:
     """Load documents from URL.
 
     Args:
@@ -266,8 +363,8 @@ def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: boo
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Cache-Control": "no-cache",
-            "Pragma": "no-cache"
-        }
+            "Pragma": "no-cache",
+        },
     )
     docs = loader.load()
     logger.debug(f"Loaded {len(docs)} documents from {url}")
@@ -290,7 +387,9 @@ def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: boo
 
     # Log final documents
     for i, doc in enumerate(docs):
-        logger.debug(f"Document {i+1} final content (first 500 chars):\n{doc.page_content[:500]}...")
+        logger.debug(
+            f"Document {i + 1} final content (first 500 chars):\n{doc.page_content[:500]}..."
+        )
 
     return docs
 
@@ -305,23 +404,23 @@ def sanitize_filename(title: str) -> str:
         Sanitized version safe for use in filenames and URLs
     """
     # Replace spaces and special characters with underscore
-    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', title)
+    sanitized = re.sub(r"[^a-zA-Z0-9]", "_", title)
     # Convert to lowercase
     sanitized = sanitized.lower()
     # Replace multiple underscores with single one
-    sanitized = re.sub(r'_+', '_', sanitized)
+    sanitized = re.sub(r"_+", "_", sanitized)
     # Remove leading/trailing underscores
-    sanitized = sanitized.strip('_')
+    sanitized = sanitized.strip("_")
     return sanitized
 
 
 def load_documents(
-      source_path: str,
-      mode: str,
-      clean_content: bool = False,
-      enable_wisdom: bool = False,
-      fabric_command: str = 'fabric'
-    ) -> List[Document] | Sequence[Document]:
+    source_path: str,
+    mode: str,
+    clean_content: bool = False,
+    enable_wisdom: bool = False,
+    fabric_command: str = "fabric",
+) -> List[Document] | Sequence[Document]:
     """Load documents from file or URL.
 
     Args:
@@ -338,6 +437,8 @@ def load_documents(
     is_url = validate_url(source_path)
 
     if is_url:
-        return load_url_documents(source_path, clean_content, enable_wisdom, fabric_command)
+        return load_url_documents(
+            source_path, clean_content, enable_wisdom, fabric_command
+        )
     else:
         return load_file_documents(source_path, mode)

@@ -1,19 +1,27 @@
 import logging
-from typing import List, Optional, Any,Tuple, cast, Literal
+from typing import List, Optional, Any, Tuple, cast, Literal
 from dataclasses import dataclass
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam, ChatCompletionAssistantMessageParam
+from openai.types.chat import (
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionUserMessageParam,
+    ChatCompletionAssistantMessageParam,
+)
 from chromadb.api import ClientAPI
 from chromadb.api.types import QueryResult
 
 logger = logging.getLogger("RAG")
 
+
 MessageRole = Literal["system", "user", "assistant"]
 Message = ChatCompletionMessageParam
+
 
 @dataclass
 class SearchIteration:
     """Represents a single search iteration"""
+
     query: str
     results: QueryResult
     relevance_score: float
@@ -21,14 +29,17 @@ class SearchIteration:
     refined_query: Optional[str] = None
     analysis: Optional[str] = None
 
+
 @dataclass
 class SearchResult:
     """Final search result with iteration history"""
+
     best_results: QueryResult
     best_score: float
     iterations: List[SearchIteration]
     final_query: str
     original_query: str
+
 
 class RAGOrchestrator:
     def __init__(
@@ -40,7 +51,7 @@ class RAGOrchestrator:
         model: str,
         max_iterations: int = 3,
         min_relevance_score: float = 0.7,
-        debug: bool = False
+        debug: bool = False,
     ):
         self.client = client
         self.llm_client = llm_client
@@ -52,36 +63,39 @@ class RAGOrchestrator:
         self.debug = debug
         self.conversation_history: List[ChatCompletionMessageParam] = []
         self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            embedding_function=embedding_function
+            name=collection_name, embedding_function=embedding_function
         )
 
     def _format_results_for_evaluation(self, results: QueryResult) -> str:
         """Format search results into a string for LLM evaluation"""
         formatted = []
 
-        if not results or not results.get('documents') or not results['documents']:
+        if not results or not results.get("documents") or not results["documents"]:
             return "No results found"
 
         # Safely get documents
-        documents_list = results.get('documents', [[]])
+        documents_list = results.get("documents", [[]])
         documents = documents_list[0] if documents_list and documents_list else []
 
         # Safely get metadata with multiple fallbacks
-        metadatas_list = results.get('metadatas', [[]])
+        metadatas_list = results.get("metadatas", [[]])
         metadatas = metadatas_list[0] if metadatas_list and metadatas_list else []
 
         # Process documents with safe metadata access
         for i, doc in enumerate(documents):
             metadata = metadatas[i] if i < len(metadatas) else {}
-            formatted.append(f"Document {i+1}:")
-            formatted.append(f"Content: {doc[:200]}..." if len(doc) > 200 else f"Content: {doc}")
+            formatted.append(f"Document {i + 1}:")
+            formatted.append(
+                f"Content: {doc[:200]}..." if len(doc) > 200 else f"Content: {doc}"
+            )
             formatted.append(f"Metadata: {metadata}")
             formatted.append("---")
 
         return "\n".join(formatted)
 
-    def evaluate_results(self, results: QueryResult, query: str, iteration: int) -> Tuple[float, str, str]:
+    def evaluate_results(
+        self, results: QueryResult, query: str, iteration: int
+    ) -> Tuple[float, str, str]:
         """
         Evaluate search results using LLM to determine relevance and suggest improvements
         Returns: (relevance_score, analysis, refined_query)
@@ -110,9 +124,18 @@ class RAGOrchestrator:
             response = self.llm_client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    cast(ChatCompletionSystemMessageParam, {"role": "system", "content": "You are a search quality analyst. Provide exact format as requested."}),
-                    cast(ChatCompletionUserMessageParam, {"role": "user", "content": evaluation_prompt})
-                ]
+                    cast(
+                        ChatCompletionSystemMessageParam,
+                        {
+                            "role": "system",
+                            "content": "You are a search quality analyst. Provide exact format as requested.",
+                        },
+                    ),
+                    cast(
+                        ChatCompletionUserMessageParam,
+                        {"role": "user", "content": evaluation_prompt},
+                    ),
+                ],
             )
 
             if not response.choices or not response.choices[0].message.content:
@@ -120,23 +143,23 @@ class RAGOrchestrator:
                 return 0.0, "Evaluation failed", query
 
             content = response.choices[0].message.content
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             score = 0.0
             analysis = "No analysis provided"
             refined_query = query
 
             for line in lines:
-                if line.startswith('SCORE:'):
+                if line.startswith("SCORE:"):
                     try:
-                        score = float(line.replace('SCORE:', '').strip())
+                        score = float(line.replace("SCORE:", "").strip())
                     except ValueError:
                         score = 0.0
-                elif line.startswith('ANALYSIS:'):
-                    analysis = line.replace('ANALYSIS:', '').strip()
-                elif line.startswith('REFINED_QUERY:'):
-                    refined = line.replace('REFINED_QUERY:', '').strip()
-                    if refined.lower() != 'none':
+                elif line.startswith("ANALYSIS:"):
+                    analysis = line.replace("ANALYSIS:", "").strip()
+                elif line.startswith("REFINED_QUERY:"):
+                    refined = line.replace("REFINED_QUERY:", "").strip()
+                    if refined.lower() != "none":
                         refined_query = refined
 
             return score, analysis, refined_query
@@ -157,7 +180,9 @@ class RAGOrchestrator:
         results = None
 
         logger.info(f"Starting iterative search for query: '{query}'")
-        logger.info(f"Max iterations: {self.max_iterations}, Min relevance score: {self.min_relevance_score}")
+        logger.info(
+            f"Max iterations: {self.max_iterations}, Min relevance score: {self.min_relevance_score}"
+        )
 
         for iteration in range(self.max_iterations):
             try:
@@ -165,8 +190,7 @@ class RAGOrchestrator:
                 logger.info(f"Current query: '{current_query}'")
 
                 results = self.collection.query(
-                    query_texts=[current_query],
-                    n_results=4
+                    query_texts=[current_query], n_results=4
                 )
 
                 relevance_score, analysis, refined_query = self.evaluate_results(
@@ -179,15 +203,17 @@ class RAGOrchestrator:
                     relevance_score=relevance_score,
                     iteration=iteration + 1,
                     refined_query=refined_query,
-                    analysis=analysis
+                    analysis=analysis,
                 )
                 iterations.append(current_iteration)
 
-                if results and results['documents'] and len(results['documents']) > 0:
-                    logger.info(f"Results found: {len(results['documents'][0])} documents")
+                if results and results["documents"] and len(results["documents"]) > 0:
+                    logger.info(
+                        f"Results found: {len(results['documents'][0])} documents"
+                    )
                     if self.debug:
-                        for i, doc in enumerate(results['documents'][0]):
-                            logger.debug(f"Document {i+1}: {doc[:100]}...")
+                        for i, doc in enumerate(results["documents"][0]):
+                            logger.debug(f"Document {i + 1}: {doc[:100]}...")
                 else:
                     logger.info("No results found")
 
@@ -200,11 +226,15 @@ class RAGOrchestrator:
                     best_score = relevance_score
 
                 if relevance_score >= self.min_relevance_score:
-                    logger.info(f"✓ Reached sufficient relevance score: {relevance_score:.2f} >= {self.min_relevance_score}")
+                    logger.info(
+                        f"✓ Reached sufficient relevance score: {relevance_score:.2f} >= {self.min_relevance_score}"
+                    )
                     break
 
                 if current_query == refined_query:
-                    logger.info("✓ No further query refinement suggested, stopping iterations")
+                    logger.info(
+                        "✓ No further query refinement suggested, stopping iterations"
+                    )
                     break
 
                 current_query = refined_query
@@ -220,26 +250,28 @@ class RAGOrchestrator:
 
         if best_results is None and results is None:
             try:
-                results = self.collection.query(
-                    query_texts=[query],
-                    n_results=4
-                )
+                results = self.collection.query(query_texts=[query], n_results=4)
             except Exception as e:
                 logger.error(f"Error in final fallback search: {e}")
-                results = cast(QueryResult, {
-                    "ids": [[]],
-                    "embeddings": None,
-                    "documents": [[]],
-                    "metadatas": [[]],
-                    "distances": [[]],
-                })
+                results = cast(
+                    QueryResult,
+                    {
+                        "ids": [[]],
+                        "embeddings": None,
+                        "documents": [[]],
+                        "metadatas": [[]],
+                        "distances": [[]],
+                    },
+                )
 
         return SearchResult(
-            best_results=cast(QueryResult, best_results if best_results is not None else results),
+            best_results=cast(
+                QueryResult, best_results if best_results is not None else results
+            ),
             best_score=best_score,
             iterations=iterations,
             final_query=current_query,
-            original_query=query
+            original_query=query,
         )
 
     def chat(self, message: str, system_prompt_template: str) -> str:
@@ -249,7 +281,11 @@ class RAGOrchestrator:
         """
         try:
             # Add user message to history
-            self.conversation_history.append(cast(ChatCompletionUserMessageParam, {"role": "user", "content": message}))
+            self.conversation_history.append(
+                cast(
+                    ChatCompletionUserMessageParam, {"role": "user", "content": message}
+                )
+            )
 
             # Perform iterative search for relevant context
             search_result = self.search(message)
@@ -258,10 +294,12 @@ class RAGOrchestrator:
             system_prompt = system_prompt_template
 
             # Add search results to system prompt if available
-            if search_result.best_results and search_result.best_results['documents']:
-                documents_list = search_result.best_results['documents'][0]
-                metadatas_list = search_result.best_results.get('metadatas', [[]])
-                metadatas = metadatas_list[0] if metadatas_list and metadatas_list else []
+            if search_result.best_results and search_result.best_results["documents"]:
+                documents_list = search_result.best_results["documents"][0]
+                metadatas_list = search_result.best_results.get("metadatas", [[]])
+                metadatas = (
+                    metadatas_list[0] if metadatas_list and metadatas_list else []
+                )
 
                 for i, doc in enumerate(documents_list):
                     metadata = metadatas[i] if i < len(metadatas) else {}
@@ -269,18 +307,27 @@ class RAGOrchestrator:
                     system_prompt += f"metadata: {metadata}\n"
 
             # Prepare messages for LLM
-            messages: List[ChatCompletionMessageParam] = [cast(ChatCompletionSystemMessageParam, {"role": "system", "content": system_prompt})]
+            messages: List[ChatCompletionMessageParam] = [
+                cast(
+                    ChatCompletionSystemMessageParam,
+                    {"role": "system", "content": system_prompt},
+                )
+            ]
             messages.extend(self.conversation_history)
 
             # Generate response
             response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=messages
+                model=self.model, messages=messages
             )
 
             if response.choices and response.choices[0].message.content:
                 assistant_message = response.choices[0].message.content
-                self.conversation_history.append(cast(ChatCompletionAssistantMessageParam, {"role": "assistant", "content": assistant_message}))
+                self.conversation_history.append(
+                    cast(
+                        ChatCompletionAssistantMessageParam,
+                        {"role": "assistant", "content": assistant_message},
+                    )
+                )
                 return assistant_message
 
             return "Sorry, I couldn't generate a response."

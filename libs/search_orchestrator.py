@@ -8,9 +8,11 @@ from chromadb.api.types import QueryResult
 
 logger = logging.getLogger("RAG")
 
+
 @dataclass
 class SearchIteration:
     """Represents a single search iteration"""
+
     query: str
     results: QueryResult
     relevance_score: float
@@ -18,14 +20,17 @@ class SearchIteration:
     refined_query: Optional[str] = None
     analysis: Optional[str] = None
 
+
 @dataclass
 class SearchResult:
     """Final search result with iteration history"""
+
     best_results: QueryResult
     best_score: float
     iterations: List[SearchIteration]
     final_query: str
     original_query: str
+
 
 class SearchOrchestrator:
     def __init__(
@@ -37,7 +42,7 @@ class SearchOrchestrator:
         model: str,
         max_iterations: int = 3,
         min_relevance_score: float = 0.7,
-        debug: bool = False
+        debug: bool = False,
     ):
         self.client = client
         self.llm_client = llm_client
@@ -48,11 +53,12 @@ class SearchOrchestrator:
         self.min_relevance_score = min_relevance_score
         self.debug = debug
         self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            embedding_function=embedding_function
+            name=collection_name, embedding_function=embedding_function
         )
 
-    def evaluate_results(self, results: QueryResult, query: str, iteration: int) -> Tuple[float, str, str]:
+    def evaluate_results(
+        self, results: QueryResult, query: str, iteration: int
+    ) -> Tuple[float, str, str]:
         """
         Evaluate search results using LLM to determine relevance and suggest improvements
         Returns: (relevance_score, analysis, refined_query)
@@ -82,9 +88,12 @@ class SearchOrchestrator:
             response = self.llm_client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a search quality analyst. Provide exact format as requested."},
-                    {"role": "user", "content": evaluation_prompt}
-                ]
+                    {
+                        "role": "system",
+                        "content": "You are a search quality analyst. Provide exact format as requested.",
+                    },
+                    {"role": "user", "content": evaluation_prompt},
+                ],
             )
 
             if not response.choices or not response.choices[0].message.content:
@@ -93,23 +102,23 @@ class SearchOrchestrator:
 
             # Parse response
             content = response.choices[0].message.content
-            lines = content.split('\n')
+            lines = content.split("\n")
 
             score = 0.0
             analysis = "No analysis provided"
             refined_query = query
 
             for line in lines:
-                if line.startswith('SCORE:'):
+                if line.startswith("SCORE:"):
                     try:
-                        score = float(line.replace('SCORE:', '').strip())
+                        score = float(line.replace("SCORE:", "").strip())
                     except ValueError:
                         score = 0.0
-                elif line.startswith('ANALYSIS:'):
-                    analysis = line.replace('ANALYSIS:', '').strip()
-                elif line.startswith('REFINED_QUERY:'):
-                    refined = line.replace('REFINED_QUERY:', '').strip()
-                    if refined.lower() != 'none':
+                elif line.startswith("ANALYSIS:"):
+                    analysis = line.replace("ANALYSIS:", "").strip()
+                elif line.startswith("REFINED_QUERY:"):
+                    refined = line.replace("REFINED_QUERY:", "").strip()
+                    if refined.lower() != "none":
                         refined_query = refined
 
             return score, analysis, refined_query
@@ -122,15 +131,17 @@ class SearchOrchestrator:
         """Format search results into a string for LLM evaluation"""
         formatted = []
 
-        if not results or not results.get('documents') or not results['documents']:
+        if not results or not results.get("documents") or not results["documents"]:
             return "No results found"
 
         # Safely get documents
-        documents_list = results.get('documents', [[]])
-        documents = documents_list[0] if documents_list and len(documents_list) > 0 else []
+        documents_list = results.get("documents", [[]])
+        documents = (
+            documents_list[0] if documents_list and len(documents_list) > 0 else []
+        )
 
         # Safely get metadata with multiple fallbacks
-        metadatas_list = results.get('metadatas')
+        metadatas_list = results.get("metadatas")
         if metadatas_list and len(metadatas_list) > 0:
             metadatas = metadatas_list[0]
         else:
@@ -139,8 +150,10 @@ class SearchOrchestrator:
         # Process documents with safe metadata access
         for i, doc in enumerate(documents):
             metadata = metadatas[i] if i < len(metadatas) else {}
-            formatted.append(f"Document {i+1}:")
-            formatted.append(f"Content: {doc[:200]}..." if len(doc) > 200 else f"Content: {doc}")
+            formatted.append(f"Document {i + 1}:")
+            formatted.append(
+                f"Content: {doc[:200]}..." if len(doc) > 200 else f"Content: {doc}"
+            )
             formatted.append(f"Metadata: {metadata}")
             formatted.append("---")
 
@@ -158,7 +171,9 @@ class SearchOrchestrator:
         results = None
 
         logger.info(f"Starting iterative search for query: '{query}'")
-        logger.info(f"Max iterations: {self.max_iterations}, Min relevance score: {self.min_relevance_score}")
+        logger.info(
+            f"Max iterations: {self.max_iterations}, Min relevance score: {self.min_relevance_score}"
+        )
 
         for iteration in range(self.max_iterations):
             try:
@@ -167,8 +182,7 @@ class SearchOrchestrator:
 
                 # Perform search
                 results = self.collection.query(
-                    query_texts=[current_query],
-                    n_results=4
+                    query_texts=[current_query], n_results=4
                 )
 
                 # Evaluate results
@@ -183,15 +197,17 @@ class SearchOrchestrator:
                     relevance_score=relevance_score,
                     iteration=iteration + 1,
                     refined_query=refined_query,
-                    analysis=analysis
+                    analysis=analysis,
                 )
                 iterations.append(current_iteration)
 
-                if results and results['documents'] and len(results['documents']) > 0:
-                    logger.info(f"Results found: {len(results['documents'][0])} documents")
+                if results and results["documents"] and len(results["documents"]) > 0:
+                    logger.info(
+                        f"Results found: {len(results['documents'][0])} documents"
+                    )
                     if self.debug:
-                        for i, doc in enumerate(results['documents'][0]):
-                            logger.debug(f"Document {i+1}: {doc[:100]}...")
+                        for i, doc in enumerate(results["documents"][0]):
+                            logger.debug(f"Document {i + 1}: {doc[:100]}...")
                 else:
                     logger.info("No results found")
 
@@ -206,11 +222,15 @@ class SearchOrchestrator:
 
                 # Check if we should continue
                 if relevance_score >= self.min_relevance_score:
-                    logger.info(f"✓ Reached sufficient relevance score: {relevance_score:.2f} >= {self.min_relevance_score}")
+                    logger.info(
+                        f"✓ Reached sufficient relevance score: {relevance_score:.2f} >= {self.min_relevance_score}"
+                    )
                     break
 
                 if current_query == refined_query:
-                    logger.info("✓ No further query refinement suggested, stopping iterations")
+                    logger.info(
+                        "✓ No further query refinement suggested, stopping iterations"
+                    )
                     break
 
                 current_query = refined_query
@@ -227,25 +247,27 @@ class SearchOrchestrator:
         if best_results is None and results is None:
             # Perform one final search if no results were obtained
             try:
-                results = self.collection.query(
-                    query_texts=[query],
-                    n_results=4
-                )
+                results = self.collection.query(query_texts=[query], n_results=4)
             except Exception as e:
                 logger.error(f"Error in final fallback search: {e}")
                 # Create a properly typed empty QueryResult
-                results = cast(QueryResult, {
-                    "ids": [[]],
-                    "embeddings": None,
-                    "documents": [[]],
-                    "metadatas": [[]],
-                    "distances": [[]],
-                })
+                results = cast(
+                    QueryResult,
+                    {
+                        "ids": [[]],
+                        "embeddings": None,
+                        "documents": [[]],
+                        "metadatas": [[]],
+                        "distances": [[]],
+                    },
+                )
 
         return SearchResult(
-            best_results=cast(QueryResult, best_results if best_results is not None else results),
+            best_results=cast(
+                QueryResult, best_results if best_results is not None else results
+            ),
             best_score=best_score,
             iterations=iterations,
             final_query=current_query,
-            original_query=query
+            original_query=query,
         )

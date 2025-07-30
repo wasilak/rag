@@ -6,7 +6,7 @@ from libs.args import parse_arguments
 from libs.database import process_data_fill
 from libs.search import process_search
 from libs.chat import process_chat
-from libs.list_models import process_list_models
+from libs.list_models import initialize_model_manager, process_list_models
 from chromadb.config import Settings
 
 logger = logging.getLogger("RAG")
@@ -17,53 +17,77 @@ def main():
 
     # Set up colored logging
     handler = colorlog.StreamHandler()
-    handler.setFormatter(colorlog.ColoredFormatter(
-        '%(log_color)s%(levelname)s:%(name)s:%(message)s',
-        log_colors={
-            'DEBUG': 'cyan',
-            'INFO': 'green',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'red,bg_white',
-        }
-    ))
+    handler.setFormatter(
+        colorlog.ColoredFormatter(
+            "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+            log_colors={
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
+        )
+    )
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(args.log_level)
 
     # Suppress noisy HTTP and library logs
-    for noisy_logger in ["httpx", "urllib3", "chromadb", "openai", "httpcore", "boto3", "botocore"]:
+    for noisy_logger in [
+        "httpx",
+        "urllib3",
+        "chromadb",
+        "openai",
+        "httpcore",
+        "boto3",
+        "botocore",
+    ]:
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+    # Initialize model manager at startup
+    initialize_model_manager()
 
     # Handle list-models command (doesn't need ChromaDB client)
     if args.subparser == "list-models":
-        process_list_models(provider=args.provider)
+        process_list_models(provider=args.provider, force_refresh=True)
         return
 
-    chroma_settings = Settings(
-        anonymized_telemetry=False
-    )
+    # Pre-cache models that will be needed
+    logger.info("Pre-caching models...")
+    process_list_models(provider="ollama", force_refresh=False)
+
+    chroma_settings = Settings(anonymized_telemetry=False)
 
     if len(args.chromadb_path) > 0:
-      client = chromadb.PersistentClient(path=args.chromadb_path, settings=chroma_settings)
+        client = chromadb.PersistentClient(
+            path=args.chromadb_path, settings=chroma_settings
+        )
     else:
-      # https://docs.trychroma.com/reference/python/client
-      client = chromadb.HttpClient(host=args.chromadb_host, port=args.chromadb_port, settings=chroma_settings)
+        # https://docs.trychroma.com/reference/python/client
+        client = chromadb.HttpClient(
+            host=args.chromadb_host, port=args.chromadb_port, settings=chroma_settings
+        )
 
     if args.subparser == "data-fill":
         if args.cleanup:
             logger.info("Cleanup enabled: collection will be deleted before filling.")
         if args.clean_content:
-            logger.info("Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion.")
+            logger.info(
+                "Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion."
+            )
         else:
-            logger.info("Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning.")
+            logger.info(
+                "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
+            )
         if args.extract_wisdom:
-            logger.info(f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights.")
+            logger.info(
+                f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights."
+            )
         process_data_fill(
             client=client,
             collection_name=args.collection,
             source_paths=args.source_path,
-
             mode=args.mode,
             cleanup=args.cleanup,
             embedding_model=args.embedding_model,

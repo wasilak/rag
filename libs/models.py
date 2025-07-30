@@ -12,20 +12,11 @@ logger = logging.getLogger("RAG")
 class ModelDefaults:
     """Default models for each LLM provider"""
 
-    OLLAMA = {
-        "chat": "qwen3:8b",
-        "embedding": "nomic-embed-text"
-    }
+    OLLAMA = {"chat": "qwen3:8b", "embedding": "nomic-embed-text"}
 
-    OPENAI = {
-        "chat": "gpt-4o",
-        "embedding": "text-embedding-3-small"
-    }
+    OPENAI = {"chat": "gpt-4o", "embedding": "text-embedding-3-small"}
 
-    GEMINI = {
-        "chat": "gemini-1.5-flash",
-        "embedding": "text-embedding-004"
-    }
+    GEMINI = {"chat": "gemini-1.5-flash", "embedding": "text-embedding-004"}
 
 
 class ModelManager:
@@ -93,15 +84,19 @@ class ModelManager:
 
             # Check if model exists in the list
             for model in available_models:
-                model_id = model.get('id', '')
-                model_full_name = model.get('name', '')
+                model_id = model.get("id", "")
+                model_full_name = model.get("name", "")
 
                 # For Ollama, handle tag format (e.g., "nomic-embed-text:latest")
                 if provider == "ollama":
-                    model_base_name = model_id.split(':')[0] if ':' in model_id else model_id
-                    if (model_id == model_name or
-                        model_full_name == model_name or
-                        model_base_name == model_name):
+                    model_base_name = (
+                        model_id.split(":")[0] if ":" in model_id else model_id
+                    )
+                    if (
+                        model_id == model_name
+                        or model_full_name == model_name
+                        or model_base_name == model_name
+                    ):
                         return True
                 else:
                     # For other providers, exact match
@@ -116,7 +111,9 @@ class ModelManager:
             logger.error(f"Error validating model '{model_name}' for {provider}: {e}")
             return False
 
-    def get_validated_model(self, provider: str, model_name: Optional[str], model_type: str) -> str:
+    def get_validated_model(
+        self, provider: str, model_name: Optional[str], model_type: str
+    ) -> str:
         """Get validated model name, falling back to default if needed
 
         Args:
@@ -130,17 +127,23 @@ class ModelManager:
         # Use default if no model specified
         if not model_name:
             model_name = self.get_default_model(provider, model_type)
-            logger.debug(f"Using default {model_type} model for {provider}: {model_name}")
+            logger.debug(
+                f"Using default {model_type} model for {provider}: {model_name}"
+            )
             return model_name
 
         # Check if custom model is valid
         if self.validate_model(provider, model_name, model_type):
-            logger.debug(f"Using validated {model_type} model for {provider}: {model_name}")
+            logger.debug(
+                f"Using validated {model_type} model for {provider}: {model_name}"
+            )
             return model_name
 
         # Fall back to default if validation fails
         default_model = self.get_default_model(provider, model_type)
-        logger.warning(f"Model '{model_name}' not valid for {provider}, using default: {default_model}")
+        logger.warning(
+            f"Model '{model_name}' not valid for {provider}, using default: {default_model}"
+        )
         return default_model
 
     def _list_ollama_models(self) -> List[Dict]:
@@ -154,36 +157,38 @@ class ModelManager:
             formatted_models = []
 
             # Handle both dict and object response formats
-            if hasattr(response, 'models'):
+            if hasattr(response, "models"):
                 models_list = response.models
-            elif isinstance(response, dict) and 'models' in response:
-                models_list = response['models']
+            elif isinstance(response, dict) and "models" in response:
+                models_list = response["models"]
             else:
                 logger.warning(f"Unexpected Ollama response format: {response}")
                 return []
 
             for model in models_list:
                 # Handle both dict and object model formats
-                if hasattr(model, 'model'):
+                if hasattr(model, "model"):
                     name = model.model
-                    size = getattr(model, 'size', 0)
-                    modified_at = getattr(model, 'modified_at', '')
+                    size = getattr(model, "size", 0)
+                    modified_at = getattr(model, "modified_at", "")
                 elif isinstance(model, dict):
-                    name = model.get('name', 'Unknown')
-                    size = model.get('size', 0)
-                    modified_at = model.get('modified_at', '')
+                    name = model.get("name", "Unknown")
+                    size = model.get("size", 0)
+                    modified_at = model.get("modified_at", "")
                 else:
                     name = str(model)
                     size = 0
-                    modified_at = ''
+                    modified_at = ""
 
-                formatted_models.append({
-                    'id': name,
-                    'name': name,
-                    'size': size,
-                    'modified_at': modified_at,
-                    'provider': 'ollama'
-                })
+                formatted_models.append(
+                    {
+                        "id": name,
+                        "name": name,
+                        "size": size,
+                        "modified_at": modified_at,
+                        "provider": "ollama",
+                    }
+                )
 
             return formatted_models
 
@@ -205,13 +210,15 @@ class ModelManager:
             # Format the response
             formatted_models = []
             for model in models.data:
-                formatted_models.append({
-                    'id': model.id,
-                    'name': model.id,
-                    'created': model.created,
-                    'owned_by': model.owned_by,
-                    'provider': 'openai'
-                })
+                formatted_models.append(
+                    {
+                        "id": model.id,
+                        "name": model.id,
+                        "created": model.created,
+                        "owned_by": model.owned_by,
+                        "provider": "openai",
+                    }
+                )
 
             return formatted_models
 
@@ -229,8 +236,7 @@ class ModelManager:
 
             # Create client with anonymous credentials and API key
             client_opts = client_options.ClientOptions(
-                api_endpoint="generativelanguage.googleapis.com",
-                api_key=api_key
+                api_endpoint="generativelanguage.googleapis.com", api_key=api_key
             )
             model_client = glanguage.ModelServiceClient(
                 client_options=client_opts,
@@ -240,14 +246,16 @@ class ModelManager:
 
             formatted_models = []
             for model in response.models:
-                model_id = model.name.split('/')[-1]
-                formatted_models.append({
-                    'id': model_id,
-                    'name': model_id,
-                    'display_name': model.display_name,
-                    'description': model.description,
-                    'provider': 'gemini'
-                })
+                model_id = model.name.split("/")[-1]
+                formatted_models.append(
+                    {
+                        "id": model_id,
+                        "name": model_id,
+                        "display_name": model.display_name,
+                        "description": model.description,
+                        "provider": "gemini",
+                    }
+                )
 
             return formatted_models
 
@@ -259,27 +267,46 @@ class ModelManager:
 # Singleton instance
 _model_manager_instance: Optional[ModelManager] = None
 
-def get_model_manager(embedding_ollama_host: str, embedding_ollama_port: int) -> ModelManager:
+
+def get_model_manager(
+    embedding_ollama_host: str, embedding_ollama_port: int
+) -> ModelManager:
     """Get singleton instance of ModelManager"""
     global _model_manager_instance
     if _model_manager_instance is None:
-        _model_manager_instance = ModelManager(embedding_ollama_host, embedding_ollama_port)
+        _model_manager_instance = ModelManager(
+            embedding_ollama_host, embedding_ollama_port
+        )
     return _model_manager_instance
 
 
-def list_provider_models(provider: str, embedding_ollama_host: str, embedding_ollama_port: int) -> List[Dict]:
+def list_provider_models(
+    provider: str, embedding_ollama_host: str, embedding_ollama_port: int
+) -> List[Dict]:
     """Convenience function to list models for a provider"""
     manager = get_model_manager(embedding_ollama_host, embedding_ollama_port)
     return manager.list_models(provider)
 
 
-def validate_model_choice(provider: str, embedding_ollama_host: str, embedding_ollama_port: int, model_name: str, model_type: str) -> bool:
+def validate_model_choice(
+    provider: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+    model_name: str,
+    model_type: str,
+) -> bool:
     """Convenience function to validate a model choice"""
     manager = get_model_manager(embedding_ollama_host, embedding_ollama_port)
     return manager.validate_model(provider, model_name, model_type)
 
 
-def get_best_model(provider: str, embedding_ollama_host: str, embedding_ollama_port: int, model_name: Optional[str], model_type: str) -> str:
+def get_best_model(
+    provider: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+    model_name: Optional[str],
+    model_type: str,
+) -> str:
     """Convenience function to get the best available model"""
     manager = get_model_manager(embedding_ollama_host, embedding_ollama_port)
     return manager.get_validated_model(provider, model_name, model_type)

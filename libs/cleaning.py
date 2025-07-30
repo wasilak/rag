@@ -10,7 +10,13 @@ logger = logging.getLogger("RAG")
 class DocumentCleaner:
     """Clean documents using LLM to remove ads, navigation, and obsolete content"""
 
-    def __init__(self, llm_provider: str, model: str, embedding_ollama_host: str, embedding_ollama_port: int):
+    def __init__(
+        self,
+        llm_provider: str,
+        model: str,
+        embedding_ollama_host: str,
+        embedding_ollama_port: int,
+    ):
         """Initialize document cleaner
 
         Args:
@@ -18,7 +24,9 @@ class DocumentCleaner:
             model: Model name to use for cleaning
         """
         self.llm_provider = llm_provider
-        self.model = get_best_model(llm_provider,embedding_ollama_host, embedding_ollama_port,  model, "chat")
+        self.model = get_best_model(
+            llm_provider, embedding_ollama_host, embedding_ollama_port, model, "chat"
+        )
         self.client = self._create_llm_client()
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
@@ -30,20 +38,22 @@ class DocumentCleaner:
         if self.llm_provider == "ollama":
             logger.debug("Using Ollama for document cleaning")
             return OpenAI(
-                base_url=f'http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1',
-                api_key='ollama',  # required, but unused
+                base_url=f"http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1",
+                api_key="ollama",  # required, but unused
             )
         elif self.llm_provider == "gemini":
             logger.debug("Using Gemini for document cleaning")
             return OpenAI(
                 api_key=os.getenv("GEMINI_API_KEY"),
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
         else:
             logger.debug("Using OpenAI for document cleaning")
             return OpenAI()
 
-    def clean_document(self, document: Document, cleaning_prompt: Optional[str] = None) -> Document:
+    def clean_document(
+        self, document: Document, cleaning_prompt: Optional[str] = None
+    ) -> Document:
         """Clean a single document using LLM
 
         Args:
@@ -63,16 +73,19 @@ class DocumentCleaner:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": cleaning_prompt},
-                    {"role": "user", "content": document.page_content}
+                    {"role": "user", "content": document.page_content},
                 ],
-                temperature=0.1  # Low temperature for consistent cleaning
+                temperature=0.1,  # Low temperature for consistent cleaning
             )
 
             if response.choices and response.choices[0].message.content:
                 cleaned_content = response.choices[0].message.content.strip()
                 # Remove thinking tags and their content
                 import re
-                cleaned_content = re.sub(r'<think>.*?</think>', '', cleaned_content, flags=re.DOTALL)
+
+                cleaned_content = re.sub(
+                    r"<think>.*?</think>", "", cleaned_content, flags=re.DOTALL
+                )
                 cleaned_content = cleaned_content.strip()
 
                 # Log the cleaned content for inspection
@@ -88,27 +101,56 @@ class DocumentCleaner:
                 # Validate content length
                 original_length = len(document.page_content)
                 cleaned_length = len(cleaned_content)
-                reduction_percent = ((original_length - cleaned_length) / original_length) * 100
+                reduction_percent = (
+                    (original_length - cleaned_length) / original_length
+                ) * 100
 
                 # If more than 30% of content is removed, likely a summary was created
                 if reduction_percent > 30:
-                    logger.warning(f"Excessive content reduction detected ({reduction_percent:.1f}%). Using original content.")
+                    logger.warning(
+                        f"Excessive content reduction detected ({reduction_percent:.1f}%). Using original content."
+                    )
                     return document
 
                 # Check for summary markers
-                summary_markers = ['here\'s', 'key points', 'overview', 'summary', 'this article', 'this guide']
-                first_two_lines = '\n'.join(cleaned_content.split('\n')[:2]).lower()
+                summary_markers = [
+                    "here's",
+                    "key points",
+                    "overview",
+                    "summary",
+                    "this article",
+                    "this guide",
+                ]
+                first_two_lines = "\n".join(cleaned_content.split("\n")[:2]).lower()
 
                 if any(marker in first_two_lines for marker in summary_markers):
-                    logger.warning("Summary markers detected in first two lines. Using original content.")
+                    logger.warning(
+                        "Summary markers detected in first two lines. Using original content."
+                    )
                     return document
 
                 # Check if content structure is preserved
-                orig_sections = len([l for l in document.page_content.split('\n') if l.strip().startswith('#')])
-                clean_sections = len([l for l in cleaned_content.split('\n') if l.strip().startswith('#')])
+                orig_sections = len(
+                    [
+                        line
+                        for line in document.page_content.split("\n")
+                        if line.strip().startswith("#")
+                    ]
+                )
+                clean_sections = len(
+                    [
+                        line
+                        for line in cleaned_content.split("\n")
+                        if line.strip().startswith("#")
+                    ]
+                )
 
-                if abs(orig_sections - clean_sections) > 1:  # Allow for 1 section difference
-                    logger.warning(f"Document structure changed (sections: {orig_sections} -> {clean_sections}). Using original content.")
+                if (
+                    abs(orig_sections - clean_sections) > 1
+                ):  # Allow for 1 section difference
+                    logger.warning(
+                        f"Document structure changed (sections: {orig_sections} -> {clean_sections}). Using original content."
+                    )
                     return document
 
                 # Create new document with cleaned content but preserve metadata
@@ -120,15 +162,22 @@ class DocumentCleaner:
                         "cleaning_model": self.model,
                         "cleaning_provider": self.llm_provider,
                         "original_length": len(document.page_content),
-                        "cleaned_length": len(cleaned_content)
-                    }
+                        "cleaned_length": len(cleaned_content),
+                    },
                 )
 
-                reduction_percent = ((len(document.page_content) - len(cleaned_content)) / len(document.page_content)) * 100
-                logger.debug(f"Document cleaned and think tags removed: {len(document.page_content)} -> {len(cleaned_content)} chars ({reduction_percent:.1f}% reduction)")
+                reduction_percent = (
+                    (len(document.page_content) - len(cleaned_content))
+                    / len(document.page_content)
+                ) * 100
+                logger.debug(
+                    f"Document cleaned and think tags removed: {len(document.page_content)} -> {len(cleaned_content)} chars ({reduction_percent:.1f}% reduction)"
+                )
                 return cleaned_document
             else:
-                logger.warning("No response from LLM during cleaning, returning original document")
+                logger.warning(
+                    "No response from LLM during cleaning, returning original document"
+                )
                 return document
 
         except Exception as e:
@@ -136,7 +185,9 @@ class DocumentCleaner:
             logger.warning("Returning original document due to cleaning error")
             return document
 
-    def clean(self, documents: List[Document], cleaning_prompt: Optional[str] = None) -> List[Document]:
+    def clean(
+        self, documents: List[Document], cleaning_prompt: Optional[str] = None
+    ) -> List[Document]:
         """Clean multiple documents
 
         Args:
@@ -146,22 +197,30 @@ class DocumentCleaner:
         Returns:
             List of cleaned documents
         """
-        logger.info(f"Cleaning {len(documents)} documents with {self.llm_provider}/{self.model}")
+        logger.info(
+            f"Cleaning {len(documents)} documents with {self.llm_provider}/{self.model}"
+        )
 
         cleaned_documents = []
         total_original_chars = 0
         total_cleaned_chars = 0
 
         for i, doc in enumerate(documents):
-            logger.debug(f"Cleaning document {i+1}/{len(documents)}")
+            logger.debug(f"Cleaning document {i + 1}/{len(documents)}")
             cleaned_doc = self.clean_document(doc, cleaning_prompt)
             cleaned_documents.append(cleaned_doc)
 
             total_original_chars += len(doc.page_content)
             total_cleaned_chars += len(cleaned_doc.page_content)
 
-        reduction_percent = ((total_original_chars - total_cleaned_chars) / total_original_chars) * 100 if total_original_chars > 0 else 0
-        logger.info(f"Successfully cleaned {len(cleaned_documents)} documents: {total_original_chars} -> {total_cleaned_chars} chars ({reduction_percent:.1f}% reduction)")
+        reduction_percent = (
+            (total_original_chars - total_cleaned_chars) / total_original_chars * 100
+            if total_original_chars > 0
+            else 0
+        )
+        logger.info(
+            f"Successfully cleaned {len(cleaned_documents)} documents: {total_original_chars} -> {total_cleaned_chars} chars ({reduction_percent:.1f}% reduction)"
+        )
         return cleaned_documents
 
     def _get_default_cleaning_prompt(self) -> str:
@@ -251,7 +310,12 @@ Edit config.json...
 - Keep ALL technical content EXACTLY as is"""
 
 
-def create_document_cleaner(llm_provider: str, model: str, embedding_ollama_host: str, embedding_ollama_port: int) -> DocumentCleaner:
+def create_document_cleaner(
+    llm_provider: str,
+    model: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+) -> DocumentCleaner:
     """Factory function to create a document cleaner
 
     Args:
@@ -264,13 +328,17 @@ def create_document_cleaner(llm_provider: str, model: str, embedding_ollama_host
     # Validate provider
     valid_providers = ["ollama", "openai", "gemini"]
     if llm_provider not in valid_providers:
-        raise ValueError(f"Invalid LLM provider: {llm_provider}. Must be one of: {valid_providers}")
+        raise ValueError(
+            f"Invalid LLM provider: {llm_provider}. Must be one of: {valid_providers}"
+        )
 
     # Validate model name is not empty
     if not model or not model.strip():
         raise ValueError("Model name cannot be empty")
 
-    return DocumentCleaner(llm_provider, model.strip(), embedding_ollama_host, embedding_ollama_port)
+    return DocumentCleaner(
+        llm_provider, model.strip(), embedding_ollama_host, embedding_ollama_port
+    )
 
 
 def clean_documents(
@@ -303,7 +371,9 @@ def clean_documents(
         return documents
 
     try:
-        cleaner = create_document_cleaner(llm_provider, model, embedding_ollama_host, embedding_ollama_port)
+        cleaner = create_document_cleaner(
+            llm_provider, model, embedding_ollama_host, embedding_ollama_port
+        )
         return cleaner.clean(documents, cleaning_prompt)
     except Exception as e:
         logger.error(f"Failed to initialize document cleaner: {e}")

@@ -29,12 +29,26 @@ def delete_collection(client: ClientAPI, collection: str) -> None:
         print(f"Error deleting collection {collection}: {e}")
 
 
-def load_documents(source_path: str, mode: str, clean_content: bool = False, enable_wisdom: bool = False, fabric_command: str = 'fabric') -> list[Document] | Sequence[Document]:
+def load_documents(
+    source_path: str,
+    mode: str,
+    clean_content: bool = False,
+    enable_wisdom: bool = False,
+    fabric_command: str = "fabric",
+) -> list[Document] | Sequence[Document]:
     """Load documents from file or URL"""
-    return load_docs(source_path, mode, clean_content=clean_content, enable_wisdom=enable_wisdom, fabric_command=fabric_command)
+    return load_docs(
+        source_path,
+        mode,
+        clean_content=clean_content,
+        enable_wisdom=enable_wisdom,
+        fabric_command=fabric_command,
+    )
 
 
-def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix: str) -> tuple[List[str], Optional[OneOrMany[Metadata]], List[str]]:
+def process_markdown_documents(
+    chunks: Sequence[Document], mode: str, id_prefix: str
+) -> tuple[List[str], Optional[OneOrMany[Metadata]], List[str]]:
     """Process markdown documents and extract metadata"""
     documents: List[str] = []
     metadata: Optional[OneOrMany[Metadata]] = []
@@ -45,7 +59,7 @@ def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix:
         i = 0
         for chunk in chunks:
             documents.append(chunk.page_content)
-            ids.append(id_prefix+"_"+str(i))
+            ids.append(id_prefix + "_" + str(i))
             metadata.append(chunk.metadata)
             i += 1
 
@@ -79,11 +93,17 @@ def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix:
 
             temp_metadata = {}
             for key, value in chunk.metadata.items():
-                temp_metadata[key] = ', '.join(value) if isinstance(value, list) else value
+                temp_metadata[key] = (
+                    ", ".join(value) if isinstance(value, list) else value
+                )
 
             if parent_chain_docs:
                 temp_metadata["page_title"] = parent_chain_docs[0].page_content
-                temp_metadata["resolved_title"] = chunk.page_content if chunk.metadata.get("category") == "Title" else parent_chain_docs[-1].page_content
+                temp_metadata["resolved_title"] = (
+                    chunk.page_content
+                    if chunk.metadata.get("category") == "Title"
+                    else parent_chain_docs[-1].page_content
+                )
             else:
                 temp_metadata["page_title"] = chunk.page_content
                 temp_metadata["resolved_title"] = chunk.page_content
@@ -93,23 +113,30 @@ def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix:
     return documents, metadata, ids
 
 
-def bootstrap_db(client: ClientAPI,
-      collection_name: str,
-      raw_documents,
-      embedding_model: str,
-      embedding_llm: str,
-      embedding_ollama_host: str,
-      embedding_ollama_port: int,
-      mode: str,
-      id_prefix: str,
-      bucket_name: str,
-      bucket_path: str,
-      chunk_size: int,
-      chunk_overlap: int,
-    ) -> None:
+def bootstrap_db(
+    client: ClientAPI,
+    collection_name: str,
+    raw_documents,
+    embedding_model: str,
+    embedding_llm: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+    mode: str,
+    id_prefix: str,
+    bucket_name: str,
+    bucket_path: str,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> None:
     """Bootstrap the database with documents"""
-    logger.debug(f"Bootstrapping collection '{collection_name}' with {len(raw_documents)} documents")
-    logger.debug(f"Using embedding model '{embedding_model}' with provider '{embedding_llm}'")
+    logger.debug(
+        f"Bootstrapping collection '{collection_name}' with {
+            len(raw_documents)} documents"
+    )
+    logger.debug(
+        f"Using embedding model '{
+            embedding_model}' with provider '{embedding_llm}'"
+    )
 
     # LLM cleanup removed: documents are now cleaned only via HTML/Markdown pre-processing
 
@@ -124,28 +151,48 @@ def bootstrap_db(client: ClientAPI,
         logger.info("Uploading documents to S3")
         for doc in raw_documents:
             base_title = doc.metadata.get("base_title")
-            doc.metadata["bucket_path"] = bucket_path  # Add bucket_path to metadata
+            # Add bucket_path to metadata
+            doc.metadata["bucket_path"] = bucket_path
             if doc.metadata.get("is_wisdom") or not doc.metadata.get("is_original"):
                 # Regular files (non-original) and wisdom files go to bucket_path
                 file_title = base_title
-                file_path = file_title + ".md" if not bucket_path else f"{bucket_path}/{file_title}.md"
+                file_path = (
+                    file_title + ".md"
+                    if not bucket_path
+                    else f"{bucket_path}/{file_title}.md"
+                )
                 upload_path = bucket_path
             else:
                 # Original files only go to original/ when they have a wisdom counterpart
                 file_title = f"{base_title}_original"
-                file_path = f"original/{file_title}.md" if not bucket_path else f"{bucket_path}/original/{file_title}.md"
-                upload_path = "original" if not bucket_path else f"{bucket_path}/original"
+                file_path = (
+                    f"original/{file_title}.md"
+                    if not bucket_path
+                    else f"{bucket_path}/original/{file_title}.md"
+                )
+                upload_path = (
+                    "original"
+                    if not bucket_path
+                    else f"{
+                        bucket_path}/original"
+                )
             doc.metadata["file_path"] = file_path
-            upload_markdown_to_s3(doc.page_content, file_title, upload_path, bucket_name)
+            upload_markdown_to_s3(
+                doc.page_content, file_title, upload_path, bucket_name
+            )
         logger.debug("S3 upload completed")
 
-    embedding_function = set_embedding_function(embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port)
+    embedding_function = set_embedding_function(
+        embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
+    )
 
     try:
-        logger.debug(f"Creating/getting collection {collection_name} with Ollama embedding function...")
+        logger.debug(
+            f"Creating/getting collection {
+                collection_name} with Ollama embedding function..."
+        )
         collection = client.get_or_create_collection(
-            name=collection_name,
-            embedding_function=embedding_function
+            name=collection_name, embedding_function=embedding_function
         )
         logger.debug(f"Collection '{collection}' created/gotten")
     except Exception as e:
@@ -161,39 +208,46 @@ def bootstrap_db(client: ClientAPI,
     )
 
     chunks = splitter.split_documents(raw_documents)
-    logger.debug(f"Split {len(raw_documents)} documents into {len(chunks)} chunks")
+    logger.debug(
+        f"Split {len(raw_documents)} documents into {
+                 len(chunks)} chunks"
+    )
 
     documents, metadata, ids = process_markdown_documents(chunks, mode, id_prefix)
 
-    logger.debug(f"Upserting {len(documents)} documents into collection '{collection_name}'")
-    collection.upsert(
-        documents=documents,
-        metadatas=metadata,
-        ids=ids
+    logger.debug(
+        f"Upserting {len(documents)} documents into collection '{
+            collection_name}'"
     )
-    logger.debug(f"Upserted {len(documents)} documents into collection '{collection_name}'")
+    collection.upsert(documents=documents, metadatas=metadata, ids=ids)
+    logger.debug(
+        f"Upserted {len(documents)} documents into collection '{
+            collection_name}'"
+    )
 
 
 def process_data_fill(
-      client: ClientAPI,
-      collection_name: str,
-      source_paths: list[str],
-      mode: str,
-      cleanup: bool,
-      embedding_model: str,
-      embedding_llm: str,
-      embedding_ollama_host: str,
-      embedding_ollama_port: int,
-      bucket_name: str,
-      bucket_path: str,
-      clean_content: bool,
-      enable_wisdom: bool,
-      fabric_command: str,
-      chunk_size: int,
-      chunk_overlap: int,
-    ) -> None:
+    client: ClientAPI,
+    collection_name: str,
+    source_paths: list[str],
+    mode: str,
+    cleanup: bool,
+    embedding_model: str,
+    embedding_llm: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+    bucket_name: str,
+    bucket_path: str,
+    clean_content: bool,
+    enable_wisdom: bool,
+    fabric_command: str,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> None:
     """Process data fill operation for multiple sources"""
-    logger.debug(f"Filling collection '{collection_name}' with data from {source_paths}")
+    logger.debug(
+        f"Filling collection '{collection_name}' with data from {source_paths}"
+    )
 
     if cleanup:
         delete_collection(client, collection_name)
@@ -202,28 +256,62 @@ def process_data_fill(
         id_prefix = hashlib.sha256(source_path.encode()).hexdigest()[:20]
         logger.debug(f"Processing {source_path} with id prefix {id_prefix}")
 
-        documents = load_documents(source_path=source_path, mode=mode, clean_content=clean_content, enable_wisdom=enable_wisdom, fabric_command=fabric_command)
+        documents = load_documents(
+            source_path=source_path,
+            mode=mode,
+            clean_content=clean_content,
+            enable_wisdom=enable_wisdom,
+            fabric_command=fabric_command,
+        )
 
         if len(documents) == 0:
             logger.warning(f"No documents found in {source_path}. Skipping...")
             continue
 
-        logger.debug(f"Bootstrapping collection '{collection_name}' with {len(documents)} documents")
-        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port, mode, id_prefix, bucket_name, bucket_path, chunk_size, chunk_overlap)
+        logger.debug(
+            f"Bootstrapping collection '{collection_name}' with {
+                len(documents)} documents"
+        )
+        bootstrap_db(
+            client,
+            collection_name,
+            documents,
+            embedding_model,
+            embedding_llm,
+            embedding_ollama_host,
+            embedding_ollama_port,
+            mode,
+            id_prefix,
+            bucket_name,
+            bucket_path,
+            chunk_size,
+            chunk_overlap,
+        )
 
-    logger.debug(f"Collection '{collection_name}' has been created and filled with data.")
+    logger.debug(
+        f"Collection '{
+            collection_name}' has been created and filled with data."
+    )
 
-def search(client: ClientAPI, collection_name: str, query: str, embedding_function) -> QueryResult:
+
+def search(
+    client: ClientAPI, collection_name: str, query: str, embedding_function
+) -> QueryResult:
     """Search for documents in the collection"""
-    logger.debug(f"Searching collection '{collection_name}' with query '{query}'")
+    logger.debug(
+        f"Searching collection '{
+                 collection_name}' with query '{query}'"
+    )
 
     """Search for documents in the collection and generate response"""
-    collection = client.get_or_create_collection(name=collection_name, embedding_function=embedding_function)
+    collection = client.get_or_create_collection(
+        name=collection_name, embedding_function=embedding_function
+    )
 
     # https://docs.trychroma.com/docs/overview/getting-started
     results = collection.query(
         query_texts=[query],  # Chroma will embed this for you
-        n_results=4  # how many results to return
+        n_results=4,  # how many results to return
     )
 
     return results

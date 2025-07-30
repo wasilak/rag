@@ -1,4 +1,5 @@
 """Validation helpers module."""
+
 import re
 import logging
 from pathlib import Path
@@ -95,7 +96,7 @@ def validate_s3_bucket_name(bucket: str) -> bool:
             return False
 
         # Must not start or end with a dot
-        if bucket.startswith('.') or bucket.endswith('.'):
+        if bucket.startswith(".") or bucket.endswith("."):
             return False
 
         # Must be lowercase
@@ -103,15 +104,15 @@ def validate_s3_bucket_name(bucket: str) -> bool:
             return False
 
         # Must be a valid DNS name (letters, numbers, dots, and hyphens)
-        if not re.match(r'^[a-z0-9][a-z0-9.-]*[a-z0-9]$', bucket):
+        if not re.match(r"^[a-z0-9][a-z0-9.-]*[a-z0-9]$", bucket):
             return False
 
         # Must not be formatted as an IP address
-        if re.match(r'^\d+\.\d+\.\d+\.\d+$', bucket):
+        if re.match(r"^\d+\.\d+\.\d+\.\d+$", bucket):
             return False
 
         # Adjacent periods not allowed
-        if '..' in bucket:
+        if ".." in bucket:
             return False
 
         return True
@@ -134,11 +135,11 @@ def validate_s3_bucket_path(path: str) -> bool:
 
     try:
         # Remove leading/trailing slashes
-        path = path.strip('/')
+        path = path.strip("/")
 
         # Check if path contains only valid characters
         # Letters, numbers, and common special characters
-        return bool(re.match(r'^[a-zA-Z0-9!-_.*\'()/ ]+$', path))
+        return bool(re.match(r"^[a-zA-Z0-9!-_.*\'()/ ]+$", path))
     except Exception as e:
         logger.debug(f"S3 bucket path validation failed: {e}")
         return False
