@@ -4,8 +4,10 @@ import logging
 from typing import List, Sequence
 from langchain_core.documents import Document
 from langchain_community.document_loaders import UnstructuredMarkdownLoader, AsyncHtmlLoader
+from .validation import validate_url, validate_path, validate_file, validate_directory
 from langchain_community.document_transformers import MarkdownifyTransformer
 from bs4 import BeautifulSoup
+import re
 
 from .wisdom import extract_wisdom, format_content
 
@@ -63,12 +65,16 @@ def load_file_documents(source_path: str, mode: str) -> List[Document]:
     """
     full_path = os.path.abspath(source_path)
 
-    if os.path.isfile(full_path):
+    if not validate_path(full_path):
+        logger.error(f"Path does not exist: {full_path}")
+        return []
+
+    if validate_file(full_path):
         return load_file_document(full_path, mode)
-    elif os.path.isdir(full_path):
+    elif validate_directory(full_path):
         return load_directory_documents(full_path, mode)
     else:
-        logger.error(f"Source path {full_path} is not a valid file or directory")
+        logger.error(f"Path {full_path} is not a valid file or directory")
         return []
 
 
@@ -205,12 +211,16 @@ def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> 
         if wisdom:
             # Create two versions of the document
             base_title = doc.metadata.get("base_title")
+            display_title = doc.metadata.get("title", "untitled")
             if not base_title:
                 # Fall back to the title field if base_title is not set
-                base_title = doc.metadata.get("title", "untitled")
-                doc.metadata["base_title"] = base_title
+                sanitized_title = sanitize_filename(display_title)
+                doc.metadata["base_title"] = sanitized_title
+                doc.metadata["display_title"] = display_title
+            else:
+                sanitized_title = base_title
             bucket_path = doc.metadata.get("bucket_path", "")
-            wisdom_content, original_content = format_content(doc.page_content, base_title, wisdom, bucket_path)
+            wisdom_content, original_content = format_content(doc.page_content, sanitized_title, display_title, wisdom, bucket_path)
 
             # Create wisdom document
             wisdom_doc = Document(
@@ -266,7 +276,9 @@ def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: boo
     for doc in docs:
         title = doc.metadata.get("title", extract_title_from_html(doc.page_content))
         doc.metadata["title"] = title
-        doc.metadata["base_title"] = title  # Set base_title as well
+        sanitized_title = sanitize_filename(title)
+        doc.metadata["base_title"] = sanitized_title  # Sanitized version for filenames
+        doc.metadata["display_title"] = title  # Original version for display
 
     # Process documents
     docs = process_html_documents(docs, clean_content)
@@ -283,9 +295,28 @@ def load_url_documents(url: str, clean_content: bool = False, enable_wisdom: boo
     return docs
 
 
+def sanitize_filename(title: str) -> str:
+    """Sanitize title for use as filename.
+
+    Args:
+        title: Original title
+
+    Returns:
+        Sanitized version safe for use in filenames and URLs
+    """
+    # Replace spaces and special characters with underscore
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', title)
+    # Convert to lowercase
+    sanitized = sanitized.lower()
+    # Replace multiple underscores with single one
+    sanitized = re.sub(r'_+', '_', sanitized)
+    # Remove leading/trailing underscores
+    sanitized = sanitized.strip('_')
+    return sanitized
+
+
 def load_documents(
       source_path: str,
-      source_type: str,
       mode: str,
       clean_content: bool = False,
       enable_wisdom: bool = False,
@@ -295,7 +326,6 @@ def load_documents(
 
     Args:
         source_path: Path to file/directory or URL
-        source_type: Type of source ('file' or 'url')
         mode: Processing mode ('single' or 'elements')
         clean_content: Whether to clean HTML content
         enable_wisdom: Whether to enable wisdom extraction
@@ -304,7 +334,10 @@ def load_documents(
     Returns:
         List of loaded documents
     """
-    if source_type == "file":
-        return load_file_documents(source_path, mode)
-    else:
+    # Use our validation module to check if path is a URL
+    is_url = validate_url(source_path)
+
+    if is_url:
         return load_url_documents(source_path, clean_content, enable_wisdom, fabric_command)
+    else:
+        return load_file_documents(source_path, mode)

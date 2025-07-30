@@ -19,7 +19,7 @@ def process_list_models(provider: str) -> None:
     logger.info(f"Listing available models for {provider}")
 
     try:
-        manager = get_model_manager()
+        manager = get_model_manager("127.0.0.1", 11434)
         models = manager.list_models(provider)
 
         if not models:

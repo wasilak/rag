@@ -63,7 +63,7 @@ def main():
             client=client,
             collection_name=args.collection,
             source_paths=args.source_path,
-            source_type=args.source_type,
+
             mode=args.mode,
             cleanup=args.cleanup,
             embedding_model=args.embedding_model,

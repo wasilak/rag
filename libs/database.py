@@ -3,6 +3,7 @@ import hashlib
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from libs.s3 import upload_markdown_to_s3
+from .validation import validate_s3_bucket_name, validate_s3_bucket_path
 from .embedding import set_embedding_function
 from chromadb.api import ClientAPI
 from typing import Sequence, List, Optional
@@ -28,9 +29,9 @@ def delete_collection(client: ClientAPI, collection: str) -> None:
         print(f"Error deleting collection {collection}: {e}")
 
 
-def load_documents(source_path: str, source_type: str, mode: str, clean_content: bool = False, enable_wisdom: bool = False, fabric_command: str = 'fabric') -> list[Document] | Sequence[Document]:
+def load_documents(source_path: str, mode: str, clean_content: bool = False, enable_wisdom: bool = False, fabric_command: str = 'fabric') -> list[Document] | Sequence[Document]:
     """Load documents from file or URL"""
-    return load_docs(source_path, source_type, mode, clean_content, enable_wisdom, fabric_command)
+    return load_docs(source_path, mode, clean_content=clean_content, enable_wisdom=enable_wisdom, fabric_command=fabric_command)
 
 
 def process_markdown_documents(chunks: Sequence[Document], mode: str, id_prefix: str) -> tuple[List[str], Optional[OneOrMany[Metadata]], List[str]]:
@@ -101,7 +102,6 @@ def bootstrap_db(client: ClientAPI,
       embedding_ollama_port: int,
       mode: str,
       id_prefix: str,
-      source_type: str,
       bucket_name: str,
       bucket_path: str,
       chunk_size: int,
@@ -114,7 +114,13 @@ def bootstrap_db(client: ClientAPI,
     # LLM cleanup removed: documents are now cleaned only via HTML/Markdown pre-processing
 
     # Upload to S3 if enabled (after cleaning, before chunking)
-    if source_type == "url" and len(bucket_name) != 0:
+    if bucket_name:
+        if not validate_s3_bucket_name(bucket_name):
+            logger.error(f"Invalid S3 bucket name: {bucket_name}")
+            return
+        if not validate_s3_bucket_path(bucket_path):
+            logger.error(f"Invalid S3 bucket path: {bucket_path}")
+            return
         logger.info("Uploading documents to S3")
         for doc in raw_documents:
             base_title = doc.metadata.get("base_title")
@@ -172,7 +178,6 @@ def process_data_fill(
       client: ClientAPI,
       collection_name: str,
       source_paths: list[str],
-      source_type: str,
       mode: str,
       cleanup: bool,
       embedding_model: str,
@@ -197,14 +202,14 @@ def process_data_fill(
         id_prefix = hashlib.sha256(source_path.encode()).hexdigest()[:20]
         logger.debug(f"Processing {source_path} with id prefix {id_prefix}")
 
-        documents = load_documents(source_path, source_type, mode, clean_content=clean_content, enable_wisdom=enable_wisdom, fabric_command=fabric_command)
+        documents = load_documents(source_path=source_path, mode=mode, clean_content=clean_content, enable_wisdom=enable_wisdom, fabric_command=fabric_command)
 
         if len(documents) == 0:
             logger.warning(f"No documents found in {source_path}. Skipping...")
             continue
 
         logger.debug(f"Bootstrapping collection '{collection_name}' with {len(documents)} documents")
-        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port,  mode, id_prefix, source_type, bucket_name, bucket_path, chunk_size, chunk_overlap)
+        bootstrap_db(client, collection_name, documents, embedding_model, embedding_llm, embedding_ollama_host, embedding_ollama_port, mode, id_prefix, bucket_name, bucket_path, chunk_size, chunk_overlap)
 
     logger.debug(f"Collection '{collection_name}' has been created and filled with data.")
 

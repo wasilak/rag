@@ -24,7 +24,6 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_MODEL: LLM model for search (default: "qwen3:8b")
     - RAG_OLLAMA_HOST: Ollama host for embedding (default: "127.0.0.1")
     - RAG_OLLAMA_PORT: Ollama port for embedding (default: 11434)
-    - RAG_SOURCE_TYPE: Source type for data-fill (default: "file")
     - RAG_MODE: Processing mode for data-fill (default: "single")
     - RAG_BUCKET_NAME: S3 bucket name for uploading markdown files (optional)
     - RAG_BUCKET_PATH: S3 bucket path for uploading markdown files (optional)
@@ -84,11 +83,7 @@ def parse_arguments() -> argparse.Namespace:
 
     # data fill subcommand
     data_subparser = subparsers.add_parser("data-fill", help="Data fill subcommand", parents=[parent_parser])
-    data_subparser.add_argument("source_path", type=str, nargs='+', help="Path(s) to the source data file(s) or URL(s)")
-    data_subparser.add_argument("--source-type", type=str,
-                             default=get_env_default("RAG_SOURCE_TYPE", "file"),
-                             choices=["file", "url"],
-                             help="Type of the source data: 'file' for local file, 'url' for remote URL (env: RAG_SOURCE_TYPE)")
+    data_subparser.add_argument("source_path", type=str, nargs='+', help="Path(s) to the source data file(s) or URL(s). URLs must start with http:// or https://")
     data_subparser.add_argument("--mode", type=str,
                              default=get_env_default("RAG_MODE", "single"),
                              choices=["single", "elements"],
