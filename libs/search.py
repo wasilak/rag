@@ -4,8 +4,8 @@ from chromadb.api import ClientAPI
 from openai import OpenAI
 from .embedding import set_embedding_function
 from .utils import format_footnotes, print_fancy_markdown
-from .database import search as db_search
 from .models import get_best_model
+from .search_orchestrator import SearchOrchestrator
 
 logger = logging.getLogger("RAG")
 
@@ -29,14 +29,28 @@ def create_llm_client(llm: str, embedding_ollama_host: str, embedding_ollama_por
         return OpenAI()
 
 
-def search(client_llm: OpenAI, model: str, client, collection_name: str, query: str, dry_run: bool, embedding_function) -> None:
-
-    results = db_search(
+def search(client_llm: OpenAI, model: str, client: ClientAPI, collection_name: str, query: str, dry_run: bool, embedding_function) -> None:
+    # Initialize search orchestrator
+    orchestrator = SearchOrchestrator(
         client=client,
+        llm_client=client_llm,
         collection_name=collection_name,
-        query=query,
         embedding_function=embedding_function,
+        model=model,
+        debug=logger.isEnabledFor(logging.DEBUG)
     )
+
+    # Perform iterative search
+    search_result = orchestrator.perform_iterative_search(query)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        for iteration in search_result.iterations:
+            logger.debug(f"Iteration {iteration.iteration}:")
+            logger.debug(f"Query: {iteration.query}")
+            logger.debug(f"Score: {iteration.relevance_score}")
+            logger.debug(f"Analysis: {iteration.analysis}")
+
+    results = search_result.best_results
 
     system_prompt = """
     ### Example
@@ -83,9 +97,9 @@ def search(client_llm: OpenAI, model: str, client, collection_name: str, query: 
     footnotes_metadata = []
 
     # Check if documents and metadatas are not None
-    if results["documents"] is not None and results["metadatas"] is not None:
-        for i, item in enumerate(results["documents"][0]):
-            metadata_entry = results["metadatas"][0][i]
+    if results['documents'] and results['metadatas']:
+        for i, item in enumerate(results['documents'][0]):
+            metadata_entry = results['metadatas'][0][i]
             footnotes_metadata.append(metadata_entry)
 
             system_prompt += f"{i + 1}. \"{item}\"\n"

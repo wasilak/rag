@@ -18,7 +18,7 @@ class DocumentCleaner:
             model: Model name to use for cleaning
         """
         self.llm_provider = llm_provider
-        self.model = get_best_model(llm_provider, model, "chat")
+        self.model = get_best_model(llm_provider,embedding_ollama_host, embedding_ollama_port,  model, "chat")
         self.client = self._create_llm_client()
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
@@ -251,7 +251,7 @@ Edit config.json...
 - Keep ALL technical content EXACTLY as is"""
 
 
-def create_document_cleaner(llm_provider: str, model: str) -> DocumentCleaner:
+def create_document_cleaner(llm_provider: str, model: str, embedding_ollama_host: str, embedding_ollama_port: int) -> DocumentCleaner:
     """Factory function to create a document cleaner
 
     Args:
@@ -270,7 +270,7 @@ def create_document_cleaner(llm_provider: str, model: str) -> DocumentCleaner:
     if not model or not model.strip():
         raise ValueError("Model name cannot be empty")
 
-    return DocumentCleaner(llm_provider, model.strip())
+    return DocumentCleaner(llm_provider, model.strip(), embedding_ollama_host, embedding_ollama_port)
 
 
 def clean_documents(
@@ -278,7 +278,9 @@ def clean_documents(
     enable_cleaning: bool,
     llm_provider: str,
     model: str,
-    cleaning_prompt: Optional[str] = None
+    cleaning_prompt: Optional[str],
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
 ) -> List[Document]:
     """Clean documents if cleaning is enabled
 
@@ -301,7 +303,7 @@ def clean_documents(
         return documents
 
     try:
-        cleaner = create_document_cleaner(llm_provider, model)
+        cleaner = create_document_cleaner(llm_provider, model, embedding_ollama_host, embedding_ollama_port)
         return cleaner.clean(documents, cleaning_prompt)
     except Exception as e:
         logger.error(f"Failed to initialize document cleaner: {e}")
