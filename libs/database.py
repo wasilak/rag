@@ -104,8 +104,8 @@ def bootstrap_db(client: ClientAPI,
       source_type: str,
       bucket_name: str,
       bucket_path: str,
-      chunk_size: int = 600,
-      chunk_overlap: int = 200,
+      chunk_size: int,
+      chunk_overlap: int,
     ) -> None:
     """Bootstrap the database with documents"""
     logger.debug(f"Bootstrapping collection '{collection_name}' with {len(raw_documents)} documents")
@@ -174,11 +174,11 @@ def process_data_fill(
       embedding_ollama_port: int,
       bucket_name: str,
       bucket_path: str,
-      clean_content: bool = False,
-      enable_wisdom: bool = False,
-      fabric_command: str = 'fabric',
-      chunk_size: int = 600,
-      chunk_overlap: int = 200,
+      clean_content: bool,
+      enable_wisdom: bool,
+      fabric_command: str,
+      chunk_size: int,
+      chunk_overlap: int,
     ) -> None:
     """Process data fill operation for multiple sources"""
     logger.debug(f"Filling collection '{collection_name}' with data from {source_paths}")
