@@ -57,13 +57,14 @@ def extract_wisdom(content: str, fabric_command: str = 'fabric') -> Optional[str
         return None
 
 
-def format_content(content: str, base_title: str, wisdom: str = "") -> tuple[str, str]:
+def format_content(content: str, base_title: str, wisdom: str = "", bucket_path: str = "") -> tuple[str, str]:
     """Format content for files.
 
     Args:
         content: Original content
         base_title: Sanitized base title for link generation
         wisdom: Optional extracted wisdom
+        bucket_path: Optional S3 bucket path prefix
 
     Returns:
         Tuple of (main content, original content) where main content
@@ -72,8 +73,12 @@ def format_content(content: str, base_title: str, wisdom: str = "") -> tuple[str
     """
     if wisdom:
         # When wisdom is extracted, create both versions with cross-links
-        wisdom_content = f"{wisdom.strip()}\n\n[[{base_title}_original]]"
-        original_content = f"{content.strip()}\n\n[[{base_title}]]"
+        original_link_path = f"{bucket_path}/original/{base_title}_original" if bucket_path else f"original/{base_title}_original"
+        wisdom_link_path = f"{bucket_path}/{base_title}" if bucket_path else f"../{base_title}"
+
+        # Create links with display text
+        wisdom_content = f"{wisdom.strip()}\n\n[[{original_link_path}|{base_title}_original]]"
+        original_content = f"{content.strip()}\n\n[[{wisdom_link_path}|{base_title}]]"
         return wisdom_content, original_content
     else:
         # When no wisdom, just return original content without links

@@ -22,7 +22,8 @@ def upload_markdown_to_s3(markdown_content: str, title: str, folder: str, bucket
     sanitized_title = sanitized_title.lower()
 
     filename = f"{sanitized_title}.md"
-    s3_key = f"{folder}/{filename}"
+    # Handle empty folder case to avoid double slashes
+    s3_key = filename if not folder else f"{folder}/{filename}"
 
     try:
         # Initialize S3 client. boto3 automatically handles the standard credential chain.

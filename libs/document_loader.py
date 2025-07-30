@@ -209,7 +209,8 @@ def process_wisdom_extraction(docs: Sequence[Document], fabric_command: str) -> 
                 # Fall back to the title field if base_title is not set
                 base_title = doc.metadata.get("title", "untitled")
                 doc.metadata["base_title"] = base_title
-            wisdom_content, original_content = format_content(doc.page_content, base_title, wisdom)
+            bucket_path = doc.metadata.get("bucket_path", "")
+            wisdom_content, original_content = format_content(doc.page_content, base_title, wisdom, bucket_path)
 
             # Create wisdom document
             wisdom_doc = Document(

@@ -118,12 +118,19 @@ def bootstrap_db(client: ClientAPI,
         logger.info("Uploading documents to S3")
         for doc in raw_documents:
             base_title = doc.metadata.get("base_title")
-            if doc.metadata.get("is_original"):
-                file_title = f"{base_title}_original"
-            else:
+            doc.metadata["bucket_path"] = bucket_path  # Add bucket_path to metadata
+            if doc.metadata.get("is_wisdom") or not doc.metadata.get("is_original"):
+                # Regular files (non-original) and wisdom files go to bucket_path
                 file_title = base_title
-            doc.metadata["file_path"] = f"{bucket_path}/{file_title}.md"
-            upload_markdown_to_s3(doc.page_content, file_title, bucket_path, bucket_name)
+                file_path = file_title + ".md" if not bucket_path else f"{bucket_path}/{file_title}.md"
+                upload_path = bucket_path
+            else:
+                # Original files only go to original/ when they have a wisdom counterpart
+                file_title = f"{base_title}_original"
+                file_path = f"original/{file_title}.md" if not bucket_path else f"{bucket_path}/original/{file_title}.md"
+                upload_path = "original" if not bucket_path else f"{bucket_path}/original"
+            doc.metadata["file_path"] = file_path
+            upload_markdown_to_s3(doc.page_content, file_title, upload_path, bucket_name)
         logger.debug("S3 upload completed")
 
     embedding_function = set_embedding_function(embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port)
