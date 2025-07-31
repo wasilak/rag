@@ -184,6 +184,8 @@ class ChatApp(App):
         embedding_llm: str,
         embedding_ollama_host: str,
         embedding_ollama_port: int,
+        ollama_host: str,
+        ollama_port: int,
     ):
         super().__init__()
         self.client = client
@@ -191,7 +193,7 @@ class ChatApp(App):
         self.llm = llm
         # Validate and get best available model
         self.model = get_best_model(
-            llm, embedding_ollama_host, embedding_ollama_port, model, "chat"
+            llm, ollama_host, ollama_port, model, "chat"
         )
         self.embedding_model = embedding_model
         self.embedding_llm = embedding_llm
@@ -202,6 +204,8 @@ class ChatApp(App):
         self.total_tokens_used = 0
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
+        self.ollama_host = ollama_host
+        self.ollama_port = ollama_port
 
     def action_scroll_up(self) -> None:
         """Scroll chat history up"""
@@ -368,7 +372,7 @@ class ChatApp(App):
         if self.llm == "ollama":
             logger.debug("Using Ollama as LLM")
             return OpenAI(
-                base_url=f"http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1",
+                base_url=f"http://{self.ollama_host}:{self.ollama_port}/v1",
                 api_key="ollama",  # required, but unused
             )
         elif self.llm == "gemini":
@@ -577,6 +581,8 @@ def process_chat(
     embedding_llm: str,
     embedding_ollama_host: str,
     embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
 ) -> None:
     """Process chat operation"""
     # Disable logging during chat to prevent UI interference
@@ -594,6 +600,8 @@ def process_chat(
         embedding_llm,
         embedding_ollama_host,
         embedding_ollama_port,
+        ollama_host,
+        ollama_port,
     )
     app.run()
 

@@ -16,6 +16,8 @@ class DocumentCleaner:
         model: str,
         embedding_ollama_host: str,
         embedding_ollama_port: int,
+        ollama_host: str,
+        ollama_port: int,
     ):
         """Initialize document cleaner
 
@@ -25,11 +27,13 @@ class DocumentCleaner:
         """
         self.llm_provider = llm_provider
         self.model = get_best_model(
-            llm_provider, embedding_ollama_host, embedding_ollama_port, model, "chat"
+            llm_provider, ollama_host, ollama_port, model, "chat"
         )
         self.client = self._create_llm_client()
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
+        self.ollama_host = ollama_host
+        self.ollama_port = ollama_port
 
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
@@ -38,7 +42,7 @@ class DocumentCleaner:
         if self.llm_provider == "ollama":
             logger.debug("Using Ollama for document cleaning")
             return OpenAI(
-                base_url=f"http://{self.embedding_ollama_host}:{self.embedding_ollama_port}/v1",
+                base_url=f"http://{self.ollama_host}:{self.ollama_port}/v1",
                 api_key="ollama",  # required, but unused
             )
         elif self.llm_provider == "gemini":
@@ -315,6 +319,8 @@ def create_document_cleaner(
     model: str,
     embedding_ollama_host: str,
     embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
 ) -> DocumentCleaner:
     """Factory function to create a document cleaner
 
@@ -337,7 +343,8 @@ def create_document_cleaner(
         raise ValueError("Model name cannot be empty")
 
     return DocumentCleaner(
-        llm_provider, model.strip(), embedding_ollama_host, embedding_ollama_port
+        llm_provider, model.strip(), embedding_ollama_host, embedding_ollama_port,
+        ollama_host, ollama_port
     )
 
 
@@ -349,6 +356,8 @@ def clean_documents(
     cleaning_prompt: Optional[str],
     embedding_ollama_host: str,
     embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
 ) -> List[Document]:
     """Clean documents if cleaning is enabled
 
@@ -372,7 +381,8 @@ def clean_documents(
 
     try:
         cleaner = create_document_cleaner(
-            llm_provider, model, embedding_ollama_host, embedding_ollama_port
+            llm_provider, model, embedding_ollama_host, embedding_ollama_port,
+            ollama_host, ollama_port
         )
         return cleaner.clean(documents, cleaning_prompt)
     except Exception as e:

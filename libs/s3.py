@@ -14,6 +14,10 @@ def upload_markdown_to_s3(
         folder (str): The folder (prefix) within the S3 bucket where the file will be uploaded.
         bucket_name (str): The name of the S3 bucket.
     """
+    # Handle None title
+    if title is None:
+        title = "untitled"
+
     # Sanitize title by replacing special characters and spaces with underscore
     sanitized_title = re.sub(r"[^a-zA-Z0-9]", "_", title)
 

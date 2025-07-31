@@ -55,7 +55,7 @@ class ModelManager:
         Returns:
             List of model information dictionaries
         """
-        logger.info(f"Listing models for {provider}")
+        logger.debug(f"Listing models for {provider}")
 
         if provider == "ollama":
             return self._list_ollama_models()
@@ -269,44 +269,51 @@ _model_manager_instance: Optional[ModelManager] = None
 
 
 def get_model_manager(
-    embedding_ollama_host: str, embedding_ollama_port: int
+    ollama_host: str, ollama_port: int
 ) -> ModelManager:
     """Get singleton instance of ModelManager"""
     global _model_manager_instance
-    if _model_manager_instance is None:
+    if (_model_manager_instance is None
+        or _model_manager_instance.ollama_host != ollama_host
+            or _model_manager_instance.ollama_port != ollama_port):
+        logger.debug(f"Creating ModelManager with Ollama at {ollama_host}:{ollama_port}")
         _model_manager_instance = ModelManager(
-            embedding_ollama_host, embedding_ollama_port
+            ollama_host, ollama_port
         )
     return _model_manager_instance
 
 
 def list_provider_models(
-    provider: str, embedding_ollama_host: str, embedding_ollama_port: int
+    provider: str, ollama_host: str, ollama_port: int
 ) -> List[Dict]:
     """Convenience function to list models for a provider"""
-    manager = get_model_manager(embedding_ollama_host, embedding_ollama_port)
+    manager = get_model_manager(ollama_host, ollama_port)
     return manager.list_models(provider)
 
 
 def validate_model_choice(
     provider: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
     model_name: str,
     model_type: str,
 ) -> bool:
     """Convenience function to validate a model choice"""
-    manager = get_model_manager(embedding_ollama_host, embedding_ollama_port)
+    manager = get_model_manager(ollama_host, ollama_port)
     return manager.validate_model(provider, model_name, model_type)
 
 
 def get_best_model(
     provider: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
     model_name: Optional[str],
     model_type: str,
 ) -> str:
-    """Convenience function to get the best available model"""
-    manager = get_model_manager(embedding_ollama_host, embedding_ollama_port)
+    """Convenience function to get the best available model
+    
+    For embedding operations, use embedding_ollama_host:embedding_ollama_port
+    For LLM operations, use ollama_host:ollama_port
+    """
+    manager = get_model_manager(ollama_host, ollama_port)
     return manager.get_validated_model(provider, model_name, model_type)

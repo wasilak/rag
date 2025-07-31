@@ -32,6 +32,15 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_FABRIC_COMMAND: Fabric command name (default: "fabric")
     - RAG_CHUNK_SIZE: Size of text chunks for splitting (default: 600)
     - RAG_CHUNK_OVERLAP: Overlap between chunks (default: 200)
+    - RAG_WEB_PORT: Web server port (default: 8080)
+    - RAG_WEB_HOST: Web server host (default: "127.0.0.1")
+    - RAG_WEB_DEBUG: Enable web debug mode (default: "false")
+    - RAG_WEB_NO_BROWSER: Don't auto-open browser (default: "false")
+    - RAG_WEB_CORS_ORIGINS: Comma-separated CORS origins (optional)
+    - RAG_WEB_SECRET_KEY: Flask secret key (default: "rag-web-secret-key")
+    - RAG_WEB_MAX_HISTORY: Max conversation history (default: 50)
+    - RAG_WEB_TIMEOUT: Request timeout in seconds (default: 300)
+    - RAG_WEB_WORKERS: Number of worker processes (default: 1)
     """
     # Create a parent parser for shared arguments
     parent_parser = argparse.ArgumentParser(add_help=False)
@@ -161,15 +170,15 @@ def parse_arguments() -> argparse.Namespace:
     data_subparser.add_argument(
         "--clean-content",
         action="store_true",
-        default=(get_env_default("RAG_CLEAN_CONTENT", "false") or "false").lower()
-        == "true",
+        default=((get_env_default("RAG_CLEAN_CONTENT", "false") or "false").lower()
+                 == "true"),
         help="Clean document content by removing navigation, ads, and UI clutter before processing (env: RAG_CLEAN_CONTENT)",
     )
     data_subparser.add_argument(
         "--extract-wisdom",
         action="store_true",
-        default=(get_env_default("RAG_EXTRACT_WISDOM", "false") or "false").lower()
-        == "true",
+        default=((get_env_default("RAG_EXTRACT_WISDOM", "false") or "false").lower()
+                 == "true"),
         help="Extract wisdom from content using Fabric (requires Fabric to be installed) (env: RAG_EXTRACT_WISDOM)",
     )
     data_subparser.add_argument(
@@ -230,6 +239,71 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         choices=["openai", "ollama", "gemini"],
         help="LLM provider to list models for",
+    )
+
+    # web subcommand
+    web_parser = subparsers.add_parser(
+        "web", help="Start web interface for interactive chat", parents=[parent_parser]
+    )
+    web_parser.add_argument(
+        "--model",
+        type=str,
+        default=get_env_default("RAG_MODEL", "qwen3:8b"),
+        help="Model to use for the LLM (env: RAG_MODEL)",
+    )
+    web_parser.add_argument(
+        "--port",
+        type=int,
+        default=int(get_env_default("RAG_WEB_PORT", 8080)),
+        help="Port for web server (env: RAG_WEB_PORT)",
+    )
+    web_parser.add_argument(
+        "--host",
+        type=str,
+        default=get_env_default("RAG_WEB_HOST", "127.0.0.1"),
+        help="Host for web server (env: RAG_WEB_HOST)",
+    )
+    web_parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=(get_env_default("RAG_WEB_DEBUG", "false") or "false").lower() == "true",
+        help="Enable debug mode for web server (env: RAG_WEB_DEBUG)",
+    )
+    web_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        default=(get_env_default("RAG_WEB_NO_BROWSER", "false") or "false").lower() == "true",
+        help="Don't automatically open browser (env: RAG_WEB_NO_BROWSER)",
+    )
+    web_parser.add_argument(
+        "--cors-origins",
+        type=str,
+        default=get_env_default("RAG_WEB_CORS_ORIGINS", ""),
+        help="Comma-separated list of allowed CORS origins (env: RAG_WEB_CORS_ORIGINS)",
+    )
+    web_parser.add_argument(
+        "--secret-key",
+        type=str,
+        default=get_env_default("RAG_WEB_SECRET_KEY", "rag-web-secret-key"),
+        help="Flask secret key for sessions (env: RAG_WEB_SECRET_KEY)",
+    )
+    web_parser.add_argument(
+        "--max-history",
+        type=int,
+        default=int(get_env_default("RAG_WEB_MAX_HISTORY", 50)),
+        help="Maximum conversation history length (env: RAG_WEB_MAX_HISTORY)",
+    )
+    web_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=int(get_env_default("RAG_WEB_TIMEOUT", 300)),
+        help="Request timeout in seconds (env: RAG_WEB_TIMEOUT)",
+    )
+    web_parser.add_argument(
+        "--workers",
+        type=int,
+        default=int(get_env_default("RAG_WEB_WORKERS", 1)),
+        help="Number of worker processes (env: RAG_WEB_WORKERS)",
     )
 
     return parser.parse_args()

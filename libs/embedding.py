@@ -21,6 +21,7 @@ def set_embedding_function(
     logger.debug("Setting embedding function")
 
     # Get validated embedding model
+    # For embedding operations, use embedding_ollama_host:embedding_ollama_port
     validated_model = get_best_model(
         function_provider,
         embedding_ollama_host,

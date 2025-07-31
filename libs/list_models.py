@@ -39,13 +39,15 @@ def get_cached_models(provider: str) -> Optional[List[Dict]]:
 
 
 def process_list_models(
-    provider: str, force_refresh: bool = False
+    provider: str, force_refresh: bool = False, silent: bool = False,
+    ollama_host: str = "127.0.0.1", ollama_port: int = 11434
 ) -> Optional[List[Dict]]:
     """Process the list-models command
 
     Args:
         provider: LLM provider to list models for (ollama, openai, gemini)
         force_refresh: Force refresh of cached models
+        silent: If True, don't display tables/output (for pre-caching)
 
     Returns:
         List of models if successful, None otherwise
@@ -54,14 +56,18 @@ def process_list_models(
     if not force_refresh and provider in _cached_models:
         logger.debug(f"Using cached models for {provider}")
         models = _cached_models[provider]
-        _display_models_table(provider, models)
-        _display_default_models(provider, _model_manager)
+        if not silent:
+            _display_models_table(provider, models)
+            _display_default_models(provider, _model_manager)
         return models
 
-    logger.info(f"Listing available models for {provider}")
+    if not silent:
+        logger.info(f"Listing available models for {provider}")
+    else:
+        logger.debug(f"Verifying models for {provider}")
 
     try:
-        initialize_model_manager()
+        initialize_model_manager(ollama_host, ollama_port)
         if _model_manager is None:
             console.print("[red]Failed to initialize model manager[/red]")
             return None
@@ -69,25 +75,32 @@ def process_list_models(
         models = _model_manager.list_models(provider)
 
         if not models:
-            console.print(
-                f"[red]No models found for {provider} or unable to connect[/red]"
-            )
+            if not silent:
+                console.print(
+                    f"[red]No models found for {provider} or unable to connect[/red]"
+                )
+            else:
+                logger.warning(f"No models found for {provider} or unable to connect")
             return None
 
         # Cache the models
         _cached_models[provider] = models
 
-        # Display models in a nice table format
-        _display_models_table(provider, models)
+        if not silent:
+            # Display models in a nice table format
+            _display_models_table(provider, models)
 
-        # Show default models
-        _display_default_models(provider, _model_manager)
+            # Show default models
+            _display_default_models(provider, _model_manager)
+        else:
+            logger.debug(f"Successfully verified {len(models)} models for {provider}")
 
         return models
 
     except Exception as e:
         logger.error(f"Error listing models for {provider}: {e}")
-        console.print(f"[red]Error: {e}[/red]")
+        if not silent:
+            console.print(f"[red]Error: {e}[/red]")
         return None
 
 

@@ -23,10 +23,14 @@ A powerful, flexible RAG (Retrieval-Augmented Generation) system that turns your
 💬 **Interactive Chat Interface**
 
 - 🖥️ Beautiful terminal UI powered by Textual
+- 🌐 **Modern web interface** with React and Material-UI
 - 💭 Conversational memory across messages
 - 📝 Markdown-formatted responses with citations
 - 🎨 Tokyo Night theme for easy on the eyes
 - ⚡ Real-time streaming responses
+- 📱 **Responsive design** with light/dark/system themes
+- ⌨️ **Keyboard shortcuts**: Ctrl+Enter to send, Ctrl+C to clear
+- 📊 **GitHub Flavored Markdown** support with tables, task lists, and more
 
 🔍 **Intelligent Search**
 
@@ -46,6 +50,8 @@ A powerful, flexible RAG (Retrieval-Augmented Generation) system that turns your
 
 ### Installation
 
+#### Option 1: Local Installation
+
 ```bash
 # Install uv package manager (if not installed)
 curl -LsSf https://raw.githubusercontent.com/astral-sh/uv/main/install.sh | sh
@@ -58,6 +64,25 @@ cd rag
 uv venv
 source .venv/bin/activate  # or .venv/Scripts/activate on Windows
 uv sync
+```
+
+#### Option 2: Docker Installation
+
+```bash
+# Build the Docker image
+docker build -t rag .
+
+# Run with Docker
+docker run -it --rm rag [command] [options]
+
+# Example: Start web interface
+docker run -it --rm -p 8080:8080 rag web --host 0.0.0.0
+
+# Example: Search documents
+docker run -it --rm rag search "your query here"
+
+# Example: Chat interface
+docker run -it --rm rag chat
 ```
 
 ### Basic Usage
@@ -93,7 +118,54 @@ python main.py search "How do I learn Rust effectively?"
 3️⃣ **Start an interactive chat:**
 
 ```bash
+# Terminal interface
 python main.py chat
+
+# Web interface
+python main.py web
+
+# Web interface with custom settings
+python main.py web --port 3000 --host 0.0.0.0 --no-browser
+```
+
+## 🌐 Web Interface
+
+The web interface provides a modern, responsive chat experience with:
+
+### ✨ **Features**
+- **Real-time streaming** responses with WebSocket
+- **GitHub Flavored Markdown** support (tables, task lists, strikethrough)
+- **Theme switching**: Light, dark, and system themes
+- **Keyboard shortcuts**: Ctrl+Enter to send, Ctrl+C to clear chat
+- **Responsive design** that works on desktop and mobile
+- **Token statistics** and connection status
+- **Clear chat functionality** with visual confirmation
+
+### 🚀 **Quick Start**
+```bash
+# Start web interface (opens browser automatically)
+python main.py web
+
+# Start without opening browser
+python main.py web --no-browser
+
+# Custom port and host
+python main.py web --port 3000 --host 0.0.0.0
+
+# Production settings
+python main.py web --port 8080 --host 0.0.0.0 --workers 4 --timeout 300
+```
+
+### ⚙️ **Advanced Configuration**
+```bash
+# CORS settings for production
+python main.py web --cors-origins "https://yourdomain.com,https://app.yourdomain.com"
+
+# Custom secret key and history limits
+python main.py web --secret-key "your-secret-key" --max-history 100
+
+# Different LLM providers
+python main.py web --llm gemini --model gemini-2.0-flash
 ```
 
 ## 🎮 Commands
@@ -165,6 +237,58 @@ Options:
 # Ctrl+C - Exit chat
 # /clear - Clear chat history
 # /info - Show current settings
+```
+
+### 🌐 Web Interface
+
+Modern web-based chat interface with the same features as TUI:
+
+```bash
+python main.py web [OPTIONS]
+
+Options:
+  --model MODEL                Model for generation (default: qwen3:8b)
+  --collection NAME            Collection to chat with (default: RAG)
+  --embedding-model MODEL      Embedding model (default: nomic-embed-text)
+  --embedding-llm [openai|ollama|gemini] Embedding LLM provider (default: ollama)
+  --llm [openai|ollama|gemini] LLM provider (default: ollama)
+  --port PORT                  Web server port (default: 8080)
+  --host HOST                  Web server host (default: 127.0.0.1)
+  --debug                      Enable debug mode
+  --no-browser                 Don't automatically open browser
+  --cors-origins ORIGINS       Comma-separated CORS origins (optional)
+  --secret-key KEY            Flask secret key (default: auto-generated)
+  --max-history NUM           Max conversation history (default: 50)
+  --timeout SECONDS           Request timeout (default: 300)
+  --workers NUM               Worker processes (default: 1)
+
+# Web features:
+# - React-based modern UI with Material-UI components
+# - Real-time streaming responses via WebSocket
+# - Light/Dark/System theme switching (Tokyo Night colors)
+# - Token counting and statistics
+# - Responsive design for desktop and mobile
+# - Same RAG functionality as TUI interface
+```
+
+#### Development Workflow
+
+Build and run web interface:
+
+```bash
+# Setup (first time only)
+make setup
+
+# Development mode (two terminals)
+make dev-web     # Start React dev server on :3000
+make web-dev     # Start Flask backend on :8080
+
+# Production mode
+make web         # Build and serve from Flask
+
+# Or use individual commands
+cd web && yarn install && yarn build
+python main.py web
 ```
 
 ## 🔧 Configuration
@@ -293,6 +417,17 @@ This project stands on the shoulders of giants! Massive thanks to these incredib
 - **[Python-dotenv](https://github.com/theskumar/python-dotenv)** - Environment variable management
 - **[colorlog](https://github.com/borntyping/python-colorlog)** - Colored log output formatting
 - **[httpx](https://www.python-httpx.org/)** - Modern HTTP client for API interactions
+
+### 🌐 **Web Interface**
+
+- **[React](https://reactjs.org/)** - Modern JavaScript library for building user interfaces
+- **[Material-UI (MUI)](https://mui.com/)** - React component library for beautiful, accessible UI
+- **[Socket.IO](https://socket.io/)** - Real-time bidirectional communication
+- **[React Markdown](https://github.com/remarkjs/react-markdown)** - Markdown rendering with GFM support
+- **[Remark GFM](https://github.com/remarkjs/remark-gfm)** - GitHub Flavored Markdown plugin
+- **[Flask](https://flask.palletsprojects.com/)** - Lightweight Python web framework
+- **[Flask-SocketIO](https://flask-socketio.readthedocs.io/)** - WebSocket support for Flask
+- **[Flask-CORS](https://flask-cors.readthedocs.io/)** - Cross-Origin Resource Sharing support
 
 ## 🤝 Contributing
 

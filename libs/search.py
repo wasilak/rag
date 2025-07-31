@@ -11,13 +11,13 @@ logger = logging.getLogger("RAG")
 
 
 def create_llm_client(
-    llm: str, embedding_ollama_host: str, embedding_ollama_port: int
+    llm: str, ollama_host: str, ollama_port: int
 ) -> OpenAI:
     """Create LLM client based on the provider"""
     if llm == "ollama":
         logger.debug("Using Ollama as LLM")
         return OpenAI(
-            base_url=f"http://{embedding_ollama_host}:{embedding_ollama_port}/v1",
+            base_url=f"http://{ollama_host}:{ollama_port}/v1",
             api_key="ollama",  # required, but unused
         )
     elif llm == "gemini":
@@ -164,16 +164,18 @@ def process_search(
     embedding_llm: str,
     embedding_ollama_host: str,
     embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
 ) -> None:
     """Process search operation"""
     logger.debug(f"Searching collection '{collection}' with query '{query}'")
 
     # Validate and get best available model
     validated_model = get_best_model(
-        llm, embedding_ollama_host, embedding_ollama_port, model, "chat"
+        llm, ollama_host, ollama_port, model, "chat"
     )
 
-    client_llm = create_llm_client(llm, embedding_ollama_host, embedding_ollama_port)
+    client_llm = create_llm_client(llm, ollama_host, ollama_port)
     embedding_function = set_embedding_function(
         embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
     )
