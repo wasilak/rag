@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/tmp/.yarn \
 RUN rm -rf /tmp/.npm /tmp/.yarn node_modules package-lock.json yarn.lock
 
 # Final stage
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Install Node.js and Yarn for web interface development
 # Combine all apt operations in a single RUN to reduce layers
