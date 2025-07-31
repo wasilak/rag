@@ -12,3 +12,16 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Node.js files (will be installed in container)
+web/node_modules/
+web/.cache/
+web/build/
+
+# Git and development files
+.git/
+.gitignore
+README.md
+*.md
+.env
+.env.*

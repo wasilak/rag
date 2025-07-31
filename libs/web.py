@@ -384,20 +384,13 @@ def process_web(
     workers: int = 1,
 ) -> None:
     """Process web command"""
-    # Build web interface if needed
+    # Check if web interface is available
     import os
     web_build_path = os.path.join(os.path.dirname(__file__), '..', 'web', 'build')
     if not os.path.exists(web_build_path):
-        logger.info("Web interface not built. Building now...")
-        try:
-            import subprocess
-            web_dir = os.path.join(os.path.dirname(__file__), '..', 'web')
-            subprocess.run(['yarn', 'build'], cwd=web_dir, check=True, capture_output=True)
-            logger.info("Web interface built successfully")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            logger.warning(f"Could not build web interface: {e}")
-            logger.info("Web interface will not be available")
-            return
+        logger.warning("Web interface build not found. Please ensure the web interface is built.")
+        logger.info("Web interface will not be available")
+        return
 
     logger.info(f"Starting web interface for collection '{collection}'")
 
