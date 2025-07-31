@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1.17
 # Multi-stage build for better performance and smaller final image
 FROM node:18-alpine AS web-builder
 
