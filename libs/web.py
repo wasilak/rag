@@ -341,13 +341,13 @@ class WebChatManager:
         """Generate a summary of the chat conversation using LLM"""
         if not messages:
             return "No messages to summarize."
-        
+
         # Build conversation text for summarization
         conversation_text = ""
         for msg in messages:
             role = "User" if msg.role == "user" else "Assistant"
             conversation_text += f"{role}: {msg.content}\n\n"
-        
+
         # Create prompt for summarization
         summary_prompt = f"""Please provide a comprehensive summary of the following conversation. The summary should capture the key points, decisions made, and important information discussed. Make it concise but informative.
 
@@ -355,7 +355,7 @@ Conversation:
 {conversation_text}
 
 Summary:"""
-        
+
         try:
             # Generate summary using LLM
             response = self.llm_client.chat.completions.create(
@@ -367,10 +367,11 @@ Summary:"""
                 max_tokens=1000,
                 temperature=0.3
             )
-            
-            summary = response.choices[0].message.content.strip()
+
+            summary = response.choices[0].message.content
+            summary = summary.strip() if summary else None
             return summary if summary else "Unable to generate summary."
-            
+
         except Exception as e:
             logger.error(f"Error generating chat summary: {e}")
             return f"Error generating summary: {str(e)}"
@@ -440,13 +441,13 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     @_require_chat_manager
     def list_chats():
         """List all available chats"""
-        return jsonify(chat_manager.list_chats())
+        return jsonify(chat_manager.list_chats())  # type: ignore[attr-defined]
 
     @app.route("/api/chats/<chat_id>", methods=["GET"])
     @_require_chat_manager
     def load_chat(chat_id: str):
         """Load specific chat"""
-        if chat_manager._load_chat(chat_id):
+        if chat_manager._load_chat(chat_id):  # type: ignore[attr-defined]
             return jsonify({"success": True})
         return jsonify({"success": False}), 404
 
@@ -454,12 +455,12 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     @_require_chat_manager
     def create_chat():
         """Create a new chat"""
-        if not chat_manager.storage:
+        if not chat_manager.storage:  # type: ignore[attr-defined]
             return jsonify({"success": False, "error": "Storage not available"}), 500
 
         # Create a new chat with a placeholder title
-        chat_id = chat_manager.storage.create_chat("New Chat")
-        chat = chat_manager.storage.get_chat(chat_id)
+        chat_id = chat_manager.storage.create_chat("New Chat")  # type: ignore[attr-defined]
+        chat = chat_manager.storage.get_chat(chat_id)  # type: ignore[attr-defined]
         if chat:
             return jsonify({
                 "id": chat.id,
@@ -474,7 +475,7 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     @_require_chat_manager
     def delete_chat(chat_id: str):
         """Delete a chat and its messages"""
-        if chat_manager.storage and chat_manager.storage.delete_chat(chat_id):
+        if chat_manager.storage and chat_manager.storage.delete_chat(chat_id):  # type: ignore[attr-defined]
             return jsonify({"success": True})
         return jsonify({"success": False}), 404
 
@@ -482,15 +483,15 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     @_require_chat_manager
     def get_config() -> Any:
         """Get current configuration"""
-        return jsonify(chat_manager.get_config())
+        return jsonify(chat_manager.get_config())  # type: ignore[attr-defined]
 
     @app.route("/api/tokens")
     @_require_chat_manager
     def get_tokens() -> Any:
         chat_id = request.args.get("chat_id")
-        if not chat_id or not chat_manager.storage:
+        if not chat_id or not chat_manager.storage:  # type: ignore[attr-defined]
             return jsonify({"total": 0, "user": 0, "assistant": 0, "messages": 0})
-        chat = chat_manager.storage.get_chat(chat_id)
+        chat = chat_manager.storage.get_chat(chat_id)  # type: ignore[attr-defined]
         if not chat:
             return jsonify({"total": 0, "user": 0, "assistant": 0, "messages": 0})
         # Count tokens
@@ -498,7 +499,7 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
         user_tokens = 0
         assistant_tokens = 0
         for msg in chat.messages:
-            tokens = chat_manager._count_tokens(msg.content)
+            tokens = chat_manager._count_tokens(msg.content)  # type: ignore[attr-defined]
             total_tokens += tokens
             if msg.role == "user":
                 user_tokens += tokens
@@ -515,9 +516,9 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     @_require_chat_manager
     def get_history() -> Any:
         chat_id = request.args.get("chat_id")
-        if not chat_id or not chat_manager.storage:
+        if not chat_id or not chat_manager.storage:  # type: ignore[attr-defined]
             return jsonify({"history": []})
-        chat = chat_manager.storage.get_chat(chat_id)
+        chat = chat_manager.storage.get_chat(chat_id)  # type: ignore[attr-defined]
         if not chat:
             return jsonify({"history": []})
         return jsonify({"history": [
@@ -529,39 +530,39 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     @_require_chat_manager
     def clear_chat() -> Any:
         """Clear conversation history"""
-        chat_manager.clear_conversation()
+        chat_manager.clear_conversation()  # type: ignore[attr-defined]
         return jsonify({"status": "cleared"})
 
     @app.route("/api/chats/<chat_id>/summarize", methods=["POST"])
     @_require_chat_manager
     def summarize_chat(chat_id: str) -> Any:
         """Summarize and compact a chat conversation"""
-        if not chat_manager.storage:
+        if not chat_manager.storage:  # type: ignore[attr-defined]
             return jsonify({"success": False, "error": "Storage not available"}), 500
-        
-        chat = chat_manager.storage.get_chat(chat_id)
+
+        chat = chat_manager.storage.get_chat(chat_id)  # type: ignore[attr-defined]
         if not chat:
             return jsonify({"success": False, "error": "Chat not found"}), 404
-        
+
         if len(chat.messages) < 2:
             return jsonify({"success": False, "error": "Not enough messages to summarize"}), 400
-        
+
         try:
             # Generate summary using LLM
-            summary = chat_manager._generate_chat_summary(chat.messages)
-            
+            summary = chat_manager._generate_chat_summary(chat.messages)  # type: ignore[attr-defined]
+
             # Replace all messages with the summary
-            success = chat_manager.storage.replace_with_summary(chat_id, summary)
-            
+            success = chat_manager.storage.replace_with_summary(chat_id, summary)  # type: ignore[attr-defined]
+
             if not success:
                 return jsonify({"success": False, "error": "Failed to replace messages with summary"}), 500
-            
+
             return jsonify({
                 "success": True,
                 "history": [{"role": "assistant", "content": summary}]
             })
         except Exception as e:
-            logger.error(f"Failed to summarize chat {chat_id}: {e}")
+            logger.error(f"Error summarizing chat: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
     # React app routes - must come after API routes
@@ -569,6 +570,8 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     def serve_index() -> Any:
         """Serve React app"""
         # index.html is in the parent directory of the static folder
+        if app.static_folder is None:
+            raise RuntimeError("Static folder not configured")
         index_folder = os.path.dirname(app.static_folder)
         print(f"Serving index.html from: {index_folder}")
         return send_from_directory(index_folder, "index.html")
@@ -577,6 +580,8 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
     def serve_react_app(path: str) -> Any:
         """Serve React app for all other routes (client-side routing)"""
         # index.html is in the parent directory of the static folder
+        if app.static_folder is None:
+            raise RuntimeError("Static folder not configured")
         index_folder = os.path.dirname(app.static_folder)
         return send_from_directory(index_folder, "index.html")
 

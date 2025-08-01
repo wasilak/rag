@@ -59,6 +59,15 @@ const App: React.FC = () => {
   const [summarizing, setSummarizing] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
 
+  // Streaming LLM reply state
+  const [streamingContent, setStreamingContent] = useState("");
+  // Track if a message is being sent (for optimistic UI)
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  // Track pending chat creation (for new chats)
+  const [pendingChatId, setPendingChatId] = useState<string | null>(null);
+  // Track if waiting for LLM response
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // Determine actual theme mode
   const actualThemeMode =
     themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
@@ -109,6 +118,34 @@ const App: React.FC = () => {
 
     loadInitialData();
   }, []);
+
+  // WebSocket streaming handler for LLM replies
+  useEffect(() => {
+    webSocketService.onMessage((chunk: string) => {
+      setStreamingContent((prev) => prev + chunk);
+    });
+  }, []);
+
+  // WebSocket status handler for robust chat switching and UI update
+  useEffect(() => {
+    webSocketService.onStatus(async (status, data) => {
+      if (status === "complete") {
+        setStreamingContent(""); // Clear streaming content on message complete
+        setPendingUserMessage(null);
+        setIsProcessing(false);
+
+        // Always switch to the new chat if a newChatId is present
+        if (data && data.newChatId) {
+          setCurrentChatId(data.newChatId);
+          await refreshChatList();
+          await handleSwitchChat(data.newChatId);
+        } else if (currentChatId) {
+          await refreshChatList();
+          await handleSwitchChat(currentChatId);
+        }
+      }
+    });
+  }, [currentChatId, pendingChatId]);
 
   // WebSocket connection management
   useEffect(() => {
@@ -166,25 +203,28 @@ const App: React.FC = () => {
     }
   };
 
-  // New Chat: Create chat in backend immediately
+  // New Chat: Create chat in backend, add to history, and select it immediately
   const handleNewChat = async () => {
+    setCreatingChat(true);
     try {
-      setCreatingChat(true);
+      // Create a new chat in the backend
       const newChat = await apiService.createChat();
-      console.log("Created new chat:", newChat);
-
-      // Update chat list to include the new chat
-      await refreshChatList();
-
-      // Set as current chat
       setCurrentChatId(newChat.id);
       setChatHistory([]);
+      setStreamingContent("");
+      setPendingUserMessage(null);
       setError(null);
-
-      // Clear token stats for new chat
       setTokenStats({ total: 0, user: 0, assistant: 0, messages: 0 });
+      await refreshChatList();
+      // Sync backend WebSocket session to new chat
+      if (webSocketService.switchChat) {
+        webSocketService.switchChat(newChat.id);
+      }
+      // If using WebSocket session state, reset it:
+      if (webSocketService.resetChat) {
+        webSocketService.resetChat();
+      }
     } catch (err) {
-      console.error("Failed to create new chat:", err);
       setError("Failed to create new chat");
     } finally {
       setCreatingChat(false);
@@ -511,8 +551,32 @@ const App: React.FC = () => {
             <Box sx={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
               <ChatInterface
                 onClearChat={handleClearChat}
-                initialMessages={chatHistory}
-                onRefreshChatList={refreshChatList}
+                messages={chatHistory}
+                isProcessing={isProcessing}
+                streamingContent={streamingContent}
+                pendingUserMessage={pendingUserMessage}
+                onSendMessage={(message: string) => {
+                  setStreamingContent(""); // Clear before sending new message
+                  setIsProcessing(true);
+                  setPendingUserMessage(null);
+
+                  // Only optimistically add user message if this is an existing chat
+                  if (currentChatId) {
+                    setChatHistory((prev) => [
+                      ...prev,
+                      {
+                        id: String(Date.now()),
+                        content: message,
+                        isUser: true,
+                        timestamp: new Date(),
+                      },
+                    ]);
+                  } else {
+                    // For new chats, show pending user message until backend responds
+                    setPendingUserMessage(message);
+                  }
+                  webSocketService.sendMessage(message);
+                }}
               />
             </Box>
           </Box>

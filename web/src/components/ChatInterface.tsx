@@ -16,38 +16,24 @@ import { webSocketService, Message } from "../services/websocket";
 
 interface ChatInterfaceProps {
   onClearChat?: () => void;
-  initialMessages?: Message[];
-  onRefreshChatList?: () => void;
+  messages: Message[];
+  onSendMessage: (message: string) => void;
+  isProcessing?: boolean;
+  streamingContent?: string;
+  pendingUserMessage?: string | null;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onClearChat,
-  initialMessages,
-  onRefreshChatList,
+  messages,
+  onSendMessage,
+  isProcessing = false,
+  streamingContent = "",
+  pendingUserMessage = null,
 }) => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
   const [currentMessage, setCurrentMessage] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textFieldRef = useRef<HTMLInputElement>(null);
-
-  // Update messages if initialMessages changes (e.g. after clear/load)
-  useEffect(() => {
-    console.log("ChatInterface: initialMessages changed:", initialMessages);
-    if (initialMessages) {
-      setMessages(initialMessages);
-    } else {
-      console.log("ChatInterface: Clearing messages");
-      setMessages([]);
-    }
-    // Also clear any streaming state when messages change
-    setStreamingContent("");
-    setStreamingMessageId(null);
-    setIsProcessing(false);
-  }, [initialMessages]);
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
@@ -56,7 +42,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent]);
+  }, [messages]);
 
   // Focus input on mount
   useEffect(() => {
@@ -68,7 +54,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if (event.key === "c" && event.ctrlKey) {
         event.preventDefault();
-        handleClearChat();
+        if (onClearChat) onClearChat();
       }
     };
 
@@ -76,73 +62,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return () => {
       document.removeEventListener("keydown", handleGlobalKeyDown);
     };
-  }, []);
-
-  // WebSocket event handlers
-  useEffect(() => {
-    webSocketService.onMessage((chunk: string) => {
-      setStreamingContent((prev) => prev + chunk);
-    });
-
-    webSocketService.onStatus(async (status, data?: any) => {
-      if (status === "processing") {
-        setIsProcessing(true);
-        setStreamingContent("");
-
-        // Create a new streaming message
-        const messageId = Date.now().toString();
-        setStreamingMessageId(messageId);
-
-        const userMessage: Message = {
-          id: Date.now().toString(),
-          content: currentMessage,
-          isUser: true,
-          timestamp: new Date(),
-        };
-
-        setMessages((prev) => [...prev, userMessage]);
-        setCurrentMessage("");
-      } else if (status === "complete") {
-        // Finalize the streaming message
-        if (streamingContent && streamingMessageId) {
-          const assistantMessage: Message = {
-            id: streamingMessageId,
-            content: streamingContent,
-            isUser: false,
-            timestamp: new Date(),
-          };
-
-          setMessages((prev) => [...prev, assistantMessage]);
-          setStreamingContent("");
-          setStreamingMessageId(null);
-        }
-        setIsProcessing(false);
-
-        // Refresh chat list after message completion to show updated titles
-        if (onRefreshChatList) {
-          console.log("Refreshing chat list after message completion");
-          onRefreshChatList();
-        }
-      } else if (status === "error") {
-        setIsProcessing(false);
-        setStreamingContent("");
-        setStreamingMessageId(null);
-      }
-    });
-
-    webSocketService.onError((error) => {
-      console.error("WebSocket error:", error);
-      setIsProcessing(false);
-      setStreamingContent("");
-      setStreamingMessageId(null);
-    });
-  }, [currentMessage, streamingContent, streamingMessageId, onRefreshChatList]);
+  }, [onClearChat]);
 
   const handleSendMessage = () => {
     const message = currentMessage.trim();
     if (!message || isProcessing) return;
-
-    webSocketService.sendMessage(message);
+    onSendMessage(message);
+    setCurrentMessage("");
   };
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
@@ -161,17 +87,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       onClearChat();
     }
     // Also clear local state
-    setMessages([]);
-    setStreamingContent("");
-    setStreamingMessageId(null);
-    setIsProcessing(false);
   };
 
   const handleStopGeneration = () => {
     // In a real implementation, you might want to send a stop signal
-    setIsProcessing(false);
-    setStreamingContent("");
-    setStreamingMessageId(null);
   };
 
   return (
@@ -215,6 +134,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <ChatMessage key={message.id} message={message} />
         ))}
 
+        {/* Pending user message for new chat */}
+        {pendingUserMessage && (
+          <ChatMessage
+            key="pending-user"
+            message={{
+              id: "pending-user",
+              content: pendingUserMessage,
+              isUser: true,
+              timestamp: new Date(),
+            }}
+          />
+        )}
+
+        {/* Streaming Message */}
         {/* Streaming Message */}
         {isProcessing && streamingContent && (
           <Fade in={true}>
@@ -235,10 +168,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {/* Processing Indicator */}
         {isProcessing && !streamingContent && (
           <Fade in={true}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 2 }}>
-              <CircularProgress size={20} />
-              <Typography variant="body2" color="text.secondary">
-                🤔 Thinking...
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 2, p: 2, flexDirection: "column" }}
+            >
+              <CircularProgress size={32} thickness={5} sx={{ mb: 1 }} />
+              <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 500 }}>
+                🦄 The AI is conjuring up a magical answer...
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 1, fontStyle: "italic" }}
+              >
+                (Sometimes even unicorns need a moment to think!)
               </Typography>
             </Box>
           </Fade>
