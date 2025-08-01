@@ -55,8 +55,6 @@ const App: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
-
-
   // Loading states for new features
   const [summarizing, setSummarizing] = useState(false);
   const [creatingChat, setCreatingChat] = useState(false);
@@ -158,8 +156,7 @@ const App: React.FC = () => {
         setChatHistory(mapped);
         setError(null);
       } else {
-        const errorMsg = resp.error || "Failed to summarize chat";
-        setError(errorMsg);
+        setError("Failed to summarize chat");
       }
     } catch (err) {
       console.error("Summarize chat error:", err);
@@ -310,16 +307,16 @@ const App: React.FC = () => {
 
   const infoText = config
     ? [
-      `Model: ${config.model}`,
-      `LLM: ${config.llm}`,
-      `Collection: ${config.collection}`,
-      `Embedding: ${config.embedding_llm}/${config.embedding_model}`,
-      tokenStats ? `Messages: ${tokenStats.messages}` : "",
-      tokenStats ? `Total Tokens: ${tokenStats.total}` : "",
-      tokenStats ? `User: ${tokenStats.user} | Assistant: ${tokenStats.assistant}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n")
+        `Model: ${config.model}`,
+        `LLM: ${config.llm}`,
+        `Collection: ${config.collection}`,
+        `Embedding: ${config.embedding_llm}/${config.embedding_model}`,
+        tokenStats ? `Messages: ${tokenStats.messages}` : "",
+        tokenStats ? `Total Tokens: ${tokenStats.total}` : "",
+        tokenStats ? `User: ${tokenStats.user} | Assistant: ${tokenStats.assistant}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
     : "";
 
   return (
@@ -444,7 +441,9 @@ const App: React.FC = () => {
         </AppBar>
 
         {/* Layout with permanent sidebar, AppBar always visible */}
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100vh", pt: { xs: 7, sm: 8 } }}>
+        <Box
+          sx={{ display: "flex", flexDirection: "column", height: "100vh", pt: { xs: 7, sm: 8 } }}
+        >
           {/* Main content row: sidebar + chat */}
           <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
             {/* Permanent Sidebar */}
