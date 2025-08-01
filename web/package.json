@@ -1,6 +1,6 @@
 {
   "name": "rag-web",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Web interface for RAG (Retrieval-Augmented Generation)",
   "scripts": {
