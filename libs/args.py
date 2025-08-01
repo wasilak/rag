@@ -35,7 +35,7 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_WEB_PORT: Web server port (default: 8080)
     - RAG_WEB_HOST: Web server host (default: "127.0.0.1")
     - RAG_WEB_DEBUG: Enable web debug mode (default: "false")
-    - RAG_WEB_NO_BROWSER: Don't auto-open browser (default: "false")
+    - RAG_WEB_BROWSER: Auto-open browser when starting web interface (default: false)
     - RAG_WEB_CORS_ORIGINS: Comma-separated CORS origins (optional)
     - RAG_WEB_SECRET_KEY: Flask secret key (default: "rag-web-secret-key")
     - RAG_WEB_MAX_HISTORY: Max conversation history (default: 50)
@@ -270,10 +270,10 @@ def parse_arguments() -> argparse.Namespace:
         help="Enable debug mode for web server (env: RAG_WEB_DEBUG)",
     )
     web_parser.add_argument(
-        "--no-browser",
+        "--browser",
         action="store_true",
-        default=(get_env_default("RAG_WEB_NO_BROWSER", "false") or "false").lower() == "true",
-        help="Don't automatically open browser (env: RAG_WEB_NO_BROWSER)",
+        default=False,
+        help="Automatically open browser when starting web interface",
     )
     web_parser.add_argument(
         "--cors-origins",

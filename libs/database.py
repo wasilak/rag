@@ -226,6 +226,24 @@ def bootstrap_db(
     )
 
 
+def log_data_fill_options(cleanup: bool, clean_content: bool, enable_wisdom: bool, fabric_command: str) -> None:
+    """Log data fill options for user feedback."""
+    if cleanup:
+        logger.info("Cleanup enabled: collection will be deleted before filling.")
+    if clean_content:
+        logger.info(
+            "Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion."
+        )
+    else:
+        logger.info(
+            "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
+        )
+    if enable_wisdom:
+        logger.info(
+            f"Wisdom extraction enabled: {fabric_command} will be used to extract key insights."
+        )
+
+
 def process_data_fill(
     client: ClientAPI,
     collection_name: str,
@@ -245,6 +263,7 @@ def process_data_fill(
     chunk_overlap: int,
 ) -> None:
     """Process data fill operation for multiple sources"""
+    log_data_fill_options(cleanup, clean_content, enable_wisdom, fabric_command)
     logger.debug(
         f"Filling collection '{collection_name}' with data from {source_paths}"
     )

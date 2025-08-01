@@ -8,6 +8,7 @@ from libs.search import process_search
 from libs.chat import process_chat
 from libs.web import process_web
 from libs.list_models import process_list_models
+from libs.cache import pre_cache_llm_models, CacheRequirements
 from chromadb.config import Settings
 
 logger = logging.getLogger("RAG")
@@ -60,68 +61,22 @@ def main():
     llm_provider = getattr(args, 'llm', 'ollama')  # Default to ollama if not specified
     embedding_llm_provider = getattr(args, 'embedding_llm', 'ollama')  # Default to ollama if not specified
 
-    # Pre-cache models based on the subcommand requirements
-    if args.subparser == "data-fill":
-        # data-fill only needs embedding models
-        providers_to_cache = {embedding_llm_provider}
-    elif args.subparser == "web":
-        # web needs both LLM and embedding models
-        providers_to_cache = {llm_provider, embedding_llm_provider}
-    elif args.subparser == "search":
-        # search needs both LLM and embedding models
-        providers_to_cache = {llm_provider, embedding_llm_provider}
-    elif args.subparser == "chat":
-        # chat needs both LLM and embedding models
-        providers_to_cache = {llm_provider, embedding_llm_provider}
-    else:
-        # Default: cache both
-        providers_to_cache = {llm_provider, embedding_llm_provider}
+    # Set up caching requirements
+    cache_requirements = CacheRequirements(
+        llm_provider=llm_provider,
+        embedding_llm_provider=embedding_llm_provider,
+        subcommand=args.subparser
+    )
 
-    for provider in providers_to_cache:
-        logger.debug(f"Pre-caching models for {provider}...")
-        try:
-            # Use appropriate Ollama host/port based on subcommand and provider
-            if provider == "ollama":
-                if args.subparser == "data-fill":
-                    # data-fill only uses Ollama for embeddings
-                    host, port = args.embedding_ollama_host, args.embedding_ollama_port
-                    logger.debug(f"data-fill with Ollama: using embedding settings {host}:{port}")
-                elif llm_provider == "ollama" and embedding_llm_provider == "ollama":
-                    # Both LLM and embedding use Ollama - check if they use different instances
-                    if (args.ollama_host == args.embedding_ollama_host
-                            and args.ollama_port == args.embedding_ollama_port):
-                        # Same Ollama instance for both - use LLM settings
-                        host, port = args.ollama_host, args.ollama_port
-                        logger.debug(f"Ollama for both LLM and embedding (same instance): using LLM settings {host}:{port}")
-                    else:
-                        # Different Ollama instances - this is tricky, use embedding settings for pre-caching
-                        # since that's what most operations need
-                        host, port = args.embedding_ollama_host, args.embedding_ollama_port
-                        logger.debug(f"Ollama for both LLM and embedding (different instances): using embedding settings {host}:{port}")
-                elif llm_provider == "ollama":
-                    # Only LLM uses Ollama
-                    host, port = args.ollama_host, args.ollama_port
-                    logger.debug(f"Ollama for LLM only: using {host}:{port}")
-                else:
-                    # Only embedding uses Ollama (or this is embedding pre-caching)
-                    host, port = args.embedding_ollama_host, args.embedding_ollama_port
-                    logger.debug(f"Ollama for embedding: using {host}:{port}")
-            else:
-                # For non-Ollama providers (gemini, openai), use embedding Ollama settings
-                # since they might need Ollama for embeddings
-                host, port = args.embedding_ollama_host, args.embedding_ollama_port
-                logger.debug(f"Non-Ollama provider {provider}: using embedding Ollama {host}:{port}")
-
-            process_list_models(
-                provider=provider,
-                force_refresh=False,
-                silent=True,
-                ollama_host=host,
-                ollama_port=port
-            )
-        except Exception as e:
-            logger.warning(f"Could not pre-cache models for {provider}: {e}")
-            # Continue anyway - this is just optimization
+    # Pre-cache models
+    pre_cache_llm_models(
+        requirements=cache_requirements,
+        process_list_models=process_list_models,
+        ollama_host=args.ollama_host,
+        ollama_port=args.ollama_port,
+        embedding_ollama_host=args.embedding_ollama_host,
+        embedding_ollama_port=args.embedding_ollama_port
+    )
 
     chroma_settings = Settings(anonymized_telemetry=False)
 
@@ -136,20 +91,7 @@ def main():
         )
 
     if args.subparser == "data-fill":
-        if args.cleanup:
-            logger.info("Cleanup enabled: collection will be deleted before filling.")
-        if args.clean_content:
-            logger.info(
-                "Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion."
-            )
-        else:
-            logger.info(
-                "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
-            )
-        if args.extract_wisdom:
-            logger.info(
-                f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights."
-            )
+
         process_data_fill(
             client=client,
             collection_name=args.collection,
@@ -214,7 +156,7 @@ def main():
             port=args.port,
             host=args.host,
             debug=args.debug,
-            no_browser=args.no_browser,
+            browser=args.browser,
             cors_origins=args.cors_origins,
             secret_key=args.secret_key,
             max_history=args.max_history,

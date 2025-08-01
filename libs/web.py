@@ -1,12 +1,14 @@
 import os
 import logging
 import webbrowser
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Callable, TypeVar, cast
+from functools import wraps
 from flask import Flask, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from openai import OpenAI
 import tiktoken
+from engineio.payload import Payload
 from chromadb.api import ClientAPI
 from .embedding import set_embedding_function
 from .utils import format_footnotes
@@ -189,8 +191,16 @@ class WebChatManager:
 
             results = collection.query(query_texts=[user_message], n_results=4)
 
+            # Convert ChromaDB query results to dict
+            results_dict: Dict[str, Any] = {
+                "documents": results["documents"],
+                "metadatas": results["metadatas"],
+                "ids": results["ids"],
+                "distances": results["distances"]
+            }
+
             # Build system prompt with context
-            system_prompt = self._build_system_prompt(results)
+            system_prompt = self._build_system_prompt(results_dict)
 
             # Prepare messages for LLM
             messages = [{"role": "system", "content": system_prompt}]
@@ -243,8 +253,93 @@ class WebChatManager:
 
 
 # Global chat manager instance
-chat_manager: WebChatManager = None
+chat_manager: Optional[WebChatManager] = None
+# Type alias for route functions
+RouteFunc = TypeVar('RouteFunc', bound=Callable[..., Any])
 
+def _require_chat_manager(f: RouteFunc) -> RouteFunc:
+    """Decorator to ensure chat manager is initialized"""
+    @wraps(f)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        assert chat_manager is not None, "Chat manager must be initialized"
+        return f(*args, **kwargs)
+    return cast(RouteFunc, wrapper)
+
+
+def _configure_cors(app: Flask, cors_origins: str, port: int, host: str) -> None:
+    """Configure CORS settings for the Flask app"""
+    if cors_origins:
+        # Use custom CORS origins if provided
+        allowed_origins = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+    else:
+        # Default CORS origins - allow React dev server (3000) and actual server port
+        allowed_origins = [
+            "http://localhost:3000", "http://127.0.0.1:3000",  # React dev server
+            f"http://localhost:{port}", f"http://127.0.0.1:{port}",  # Local access
+            f"http://{host}:{port}",  # Specified host
+            "*"  # Allow all origins when binding to 0.0.0.0
+        ]
+
+    CORS(app, origins=allowed_origins, supports_credentials=True)
+
+def _initialize_chat_manager(
+    client: ClientAPI,
+    collection_name: str,
+    llm: str,
+    model: str,
+    embedding_model: str,
+    embedding_llm: str,
+    embedding_ollama_host: str,
+    embedding_ollama_port: int,
+    ollama_host: str,
+    ollama_port: int,
+    max_history: int,
+) -> None:
+    """Initialize the global chat manager"""
+    global chat_manager
+    chat_manager = WebChatManager(
+        client, collection_name, llm, model, embedding_model,
+        embedding_llm, embedding_ollama_host, embedding_ollama_port,
+        ollama_host, ollama_port, max_history
+    )
+
+def setup_routes(app: Flask) -> None:
+    """Set up Flask routes"""
+    @app.route("/")
+    def serve_index() -> Any:
+        """Serve React app"""
+        if app.static_folder is None:
+            raise RuntimeError("Static folder not configured")
+        return send_from_directory(app.static_folder, "index.html")
+
+    @app.route("/api/config")
+    @_require_chat_manager
+    def get_config() -> Any:
+        """Get current configuration"""
+        assert chat_manager is not None
+        return jsonify(chat_manager.get_config())
+
+    @app.route("/api/tokens")
+    @_require_chat_manager
+    def get_tokens() -> Any:
+        """Get token statistics"""
+        assert chat_manager is not None
+        return jsonify(chat_manager.count_conversation_tokens())
+
+    @app.route("/api/history")
+    @_require_chat_manager
+    def get_history() -> Any:
+        """Get conversation history"""
+        assert chat_manager is not None
+        return jsonify({"history": chat_manager.conversation_history})
+
+    @app.route("/api/clear", methods=["POST"])
+    @_require_chat_manager
+    def clear_chat() -> Any:
+        """Clear conversation history"""
+        assert chat_manager is not None
+        chat_manager.clear_conversation()
+        return jsonify({"status": "cleared"})
 
 def create_app(
     client: ClientAPI,
@@ -263,62 +358,43 @@ def create_app(
     secret_key: str = "rag-web-secret-key",
     max_history: int = 50,
     timeout: int = 300,
+    debug: bool = False,
 ) -> Flask:
     """Create and configure Flask app"""
-    global chat_manager
-
     app = Flask(__name__, static_folder="../web/build", static_url_path="")
     app.config["SECRET_KEY"] = secret_key
-    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timeout
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # Disable caching in development
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max request size
+    app.config["PROPAGATE_EXCEPTIONS"] = True
+    if debug:
+        app.config["DEBUG"] = True  # Enable Flask debug mode when requested
 
-    # Configure CORS origins
-    if cors_origins:
-        # Use custom CORS origins if provided
-        allowed_origins = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
-    else:
-        # Default CORS origins - allow React dev server (3000) and actual server port
-        allowed_origins = [
-            "http://localhost:3000", "http://127.0.0.1:3000",  # React dev server
-            f"http://localhost:{port}", f"http://{host}:{port}",  # Actual server
-        ]
+    # Configure CORS
+    _configure_cors(app, cors_origins, port, host)
 
-    CORS(app, origins=allowed_origins)
-
-    # Initialize SocketIO
-    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='threading')
+    # Initialize SocketIO with permissive CORS for 0.0.0.0 binding
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        async_mode='threading',
+        ping_timeout=timeout,
+        ping_interval=25,
+        max_http_buffer_size=16 * 1024 * 1024,  # 16MB max WebSocket message size
+        always_connect=True,
+        logger=True if debug else False,  # Only enable socket logging in debug mode
+        engineio_logger=True if debug else False,  # Only enable engine logging in debug mode
+        manage_session=False  # Disable session management for development
+    )
 
     # Initialize chat manager
-    chat_manager = WebChatManager(
+    _initialize_chat_manager(
         client, collection_name, llm, model, embedding_model,
         embedding_llm, embedding_ollama_host, embedding_ollama_port,
         ollama_host, ollama_port, max_history
     )
 
-    @app.route("/")
-    def serve_index():
-        """Serve React app"""
-        return send_from_directory(app.static_folder, "index.html")
-
-    @app.route("/api/config")
-    def get_config():
-        """Get current configuration"""
-        return jsonify(chat_manager.get_config())
-
-    @app.route("/api/tokens")
-    def get_tokens():
-        """Get token statistics"""
-        return jsonify(chat_manager.count_conversation_tokens())
-
-    @app.route("/api/history")
-    def get_history():
-        """Get conversation history"""
-        return jsonify({"history": chat_manager.conversation_history})
-
-    @app.route("/api/clear", methods=["POST"])
-    def clear_chat():
-        """Clear conversation history"""
-        chat_manager.clear_conversation()
-        return jsonify({"status": "cleared"})
+    # Set up routes
+    setup_routes(app)
 
     @socketio.on("send_message")
     def handle_message(data):
@@ -332,6 +408,7 @@ def create_app(
 
         # Generate streaming response
         try:
+            assert chat_manager is not None, "Chat manager must be initialized"
             for chunk in chat_manager.generate_response_stream(user_message):
                 emit("message_chunk", {"chunk": chunk})
 
@@ -356,8 +433,19 @@ def create_app(
         """Handle client disconnection"""
         logger.info("Client disconnected from WebSocket")
 
+    @socketio.on_error()
+    def handle_error(e):
+        """Handle WebSocket errors"""
+        logger.error(f"WebSocket error: {str(e)}")
+        emit("error", {"error": str(e)})
+
+    @socketio.on("error")
+    def handle_client_error(error):
+        """Handle client-side WebSocket errors"""
+        logger.error(f"Client WebSocket error: {error}")
+
     # Store socketio instance in app for access
-    app.socketio = socketio
+    setattr(app, 'socketio', socketio)
 
     return app
 
@@ -376,7 +464,7 @@ def process_web(
     port: int = 8080,
     host: str = "127.0.0.1",
     debug: bool = False,
-    no_browser: bool = False,
+    browser: bool = False,
     cors_origins: str = "",
     secret_key: str = "rag-web-secret-key",
     max_history: int = 50,
@@ -397,17 +485,32 @@ def process_web(
     app = create_app(
         client, collection, llm, model, embedding_model,
         embedding_llm, embedding_ollama_host, embedding_ollama_port,
-        ollama_host, ollama_port, port, host, cors_origins, secret_key, max_history, timeout
+        ollama_host, ollama_port, port, host, cors_origins, secret_key, max_history, timeout,
+        debug
     )
 
     # Start the server
     logger.info(f"Web interface starting at http://{host}:{port}")
 
-    # Open browser if not disabled
-    if not no_browser:
-        url = f"http://{host}:{port}"
+    # Open browser if requested
+    if browser:
+        # Always use localhost for browser, regardless of host binding
+        url = f"http://localhost:{port}"
         logger.debug(f"Opening browser to {url}")
         webbrowser.open(url)
 
+    # Configure Engine.IO for development
+    Payload.max_decode_packets = 1000  # Increased for development to help with debugging
+
     # Run the app with SocketIO
-    app.socketio.run(app, host=host, port=port, debug=debug)
+    if hasattr(app, 'socketio'):
+        getattr(app, 'socketio').run(
+            app,
+            host=host,
+            port=port,
+            debug=True if debug else False,
+            allow_unsafe_werkzeug=True,
+            log_output=True if debug else False  # Only show logs in debug mode
+        )
+    else:
+        raise RuntimeError("SocketIO not properly initialized")

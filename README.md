@@ -133,6 +133,7 @@ python main.py web --port 3000 --host 0.0.0.0 --no-browser
 The web interface provides a modern, responsive chat experience with:
 
 ### ✨ **Features**
+
 - **Real-time streaming** responses with WebSocket
 - **GitHub Flavored Markdown** support (tables, task lists, strikethrough)
 - **Theme switching**: Light, dark, and system themes
@@ -142,12 +143,13 @@ The web interface provides a modern, responsive chat experience with:
 - **Clear chat functionality** with visual confirmation
 
 ### 🚀 **Quick Start**
+
 ```bash
 # Start web interface (opens browser automatically)
 python main.py web
 
-# Start without opening browser
-python main.py web --no-browser
+# Start with browser auto-opening (default: no browser)
+python main.py web --browser
 
 # Custom port and host
 python main.py web --port 3000 --host 0.0.0.0
@@ -157,6 +159,7 @@ python main.py web --port 8080 --host 0.0.0.0 --workers 4 --timeout 300
 ```
 
 ### ⚙️ **Advanced Configuration**
+
 ```bash
 # CORS settings for production
 python main.py web --cors-origins "https://yourdomain.com,https://app.yourdomain.com"
@@ -255,7 +258,7 @@ Options:
   --port PORT                  Web server port (default: 8080)
   --host HOST                  Web server host (default: 127.0.0.1)
   --debug                      Enable debug mode
-  --no-browser                 Don't automatically open browser
+  --browser                    Automatically open browser when starting
   --cors-origins ORIGINS       Comma-separated CORS origins (optional)
   --secret-key KEY            Flask secret key (default: auto-generated)
   --max-history NUM           Max conversation history (default: 50)
