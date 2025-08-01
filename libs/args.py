@@ -14,6 +14,7 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_COLLECTION: Collection name (default: "RAG")
     - RAG_CHROMADB_PATH: Database path (default: "")
     - RAG_CHROMADB_HOST: ChromaDB host (default: "127.0.0.1")
+    - RAG_CHAT_DB_PATH: Path to SQLite chat history database (default: "chat_history.db")
     - RAG_CHROMADB_PORT: ChromaDB port (default: 8000)
     - RAG_LOG_LEVEL: Log level (default: "INFO")
     - RAG_EMBEDDING_MODEL: Embedding model (default: "nomic-embed-text")
@@ -67,6 +68,12 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=int(get_env_default("RAG_CHROMADB_PORT", 8000)),
         help="Port for the ChromaDB server (env: RAG_CHROMADB_PORT)",
+    )
+    parent_parser.add_argument(
+        "--chat-db-path",
+        type=str,
+        default=get_env_default("RAG_CHAT_DB_PATH", "chat_history.db"),
+        help="Path to SQLite chat history database (env: RAG_CHAT_DB_PATH)",
     )
     parent_parser.add_argument(
         "--dry-run",

@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, ScrollableContainer
@@ -13,6 +13,7 @@ from .embedding import set_embedding_function
 from .utils import format_footnotes
 from .models import get_best_model
 from chromadb.api import ClientAPI
+from .chat_storage import ChatStorage, StoredChat
 
 logger = logging.getLogger("RAG")
 
@@ -63,9 +64,14 @@ class ChatMessage(Static):
         )
         self.update(panel)
 
-
 class ChatHistory(ScrollableContainer):
     """Scrollable container for chat messages"""
+
+
+
+    def clear(self) -> None:
+        """Clear all messages from the chat history"""
+        self.remove_children()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -87,6 +93,58 @@ class ChatApp(App):
     # Force dark mode and ensure proper rendering
     CSS_PATH = None  # Use inline CSS
     TITLE = "RAG Chat"
+
+    # Chat storage
+    storage: Optional[ChatStorage] = None
+    llm_client: Optional[OpenAI] = None
+    current_chat_id: Optional[str] = None
+    chat_list: List[StoredChat] = []
+    in_chat_selection: bool = True
+    selected_chat_index: int = 0
+
+    def show_chat_selection_menu(self):
+        """Display the chat selection menu"""
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich.text import Text
+
+        table = Table(title="Chat History", show_lines=True)
+        table.add_column("Index", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Title", style="magenta")
+        table.add_column("Created", style="green")
+        table.add_column("Last Updated", style="yellow")
+
+        for idx, chat in enumerate(self.chat_list):
+            table.add_row(
+                str(idx + 1),
+                chat.title,
+                chat.created_at.strftime("%Y-%m-%d %H:%M"),
+                chat.last_updated.strftime("%Y-%m-%d %H:%M"),
+            )
+
+        help_text = Text(
+            "\n[Enter] Select  [n] New Chat  [d] Delete  [q] Quit",
+            style="bold white",
+        )
+        panel = Panel.fit(table, title="Select a chat (use ↑/↓, Enter, n, d, q)", subtitle_align="right")
+        chat_history = self.query_one("#chat-history", ChatHistory)
+        chat_history.clear()
+        chat_history.mount(Static(panel))
+        self.query_one("#status", Static).update(help_text)
+
+    # Chat state
+    client: Optional[ClientAPI] = None
+    collection_name: str = ""
+    llm: str = ""
+    model: str = ""
+    embedding_model: str = ""
+    embedding_llm: str = ""
+    embedding_ollama_host: str = ""
+    embedding_ollama_port: int = 0
+    ollama_host: str = ""
+    ollama_port: int = 0
+    conversation_history: List[Dict[str, str]] = []
+    tokenizer: Any = None
 
     # Add key bindings for scrolling
     BINDINGS = [
@@ -176,7 +234,7 @@ class ChatApp(App):
 
     def __init__(
         self,
-        client,
+        client: ClientAPI,
         collection_name: str,
         llm: str,
         model: str,
@@ -186,8 +244,10 @@ class ChatApp(App):
         embedding_ollama_port: int,
         ollama_host: str,
         ollama_port: int,
-    ):
+        chat_db_path: Optional[str] = None,
+    ) -> None:
         super().__init__()
+        self.conversation_history = []
         self.client = client
         self.collection_name = collection_name
         self.llm = llm
@@ -201,11 +261,16 @@ class ChatApp(App):
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
         self.tokenizer = self._get_tokenizer()
+        if chat_db_path:
+            self.storage = ChatStorage(chat_db_path)
         self.total_tokens_used = 0
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
         self.ollama_host = ollama_host
         self.ollama_port = ollama_port
+        self.chat_list: List[StoredChat] = []
+        self.in_chat_selection: bool = True
+        self.selected_chat_index: int = 0
 
     def action_scroll_up(self) -> None:
         """Scroll chat history up"""
@@ -403,8 +468,53 @@ class ChatApp(App):
 
     def on_key(self, event) -> None:
         """Handle key events"""
+        if self.in_chat_selection:
+            self._handle_chat_selection_keys(event)
+            return
+        self._handle_main_chat_keys(event)
+
+    def _handle_chat_selection_keys(self, event) -> None:
+        """Handle key events in chat selection menu"""
+        if event.key in ("down", "j"):
+            if self.selected_chat_index < len(self.chat_list) - 1:
+                self.selected_chat_index += 1
+                self.show_chat_selection_menu()
+            event.stop()
+        elif event.key in ("up", "k"):
+            if self.selected_chat_index > 0:
+                self.selected_chat_index -= 1
+                self.show_chat_selection_menu()
+            event.stop()
+        elif event.key == "enter":
+            if self.chat_list:
+                self.load_selected_chat()
+            event.stop()
+        elif event.key == "n":
+            self.create_new_chat()
+            event.stop()
+        elif event.key == "d":
+            self.delete_selected_chat()
+            event.stop()
+        elif event.key == "q":
+            self.exit()
+            event.stop()
+        else:
+            event.continue_propagation()
+
+    def _handle_main_chat_keys(self, event) -> None:
+        """Handle key events in main chat mode"""
         if event.key == "ctrl+c":
             self.exit()
+        elif event.key == "ctrl+h":
+            # Return to chat selection menu
+            self.in_chat_selection = True
+            if self.storage:
+                self.chat_list = self.storage.list_chats()
+            else:
+                self.chat_list = []
+            self.selected_chat_index = 0
+            self.show_chat_selection_menu()
+            event.stop()
         elif event.key == "cmd+p":
             self.action_command_palette()
         elif event.key == "ctrl+enter":
@@ -416,6 +526,51 @@ class ChatApp(App):
                 # Prevent the event from propagating to the TextArea
                 event.stop()
         # Let other keys be handled by the bindings (up, down, pageup, pagedown, etc.)
+
+    def load_selected_chat(self):
+        """Load the selected chat and enter chat mode"""
+        if not self.chat_list:
+            return
+        chat = self.chat_list[self.selected_chat_index]
+        self.current_chat_id = chat.id
+        self.conversation_history = []
+        chat_history = self.query_one("#chat-history", ChatHistory)
+        chat_history.clear()
+        for msg in chat.messages:
+            chat_history.add_message(
+                msg.content,
+                is_user=(msg.role == "user"),
+                model_name=self.model if msg.role == "assistant" else "",
+            )
+            self.conversation_history.append({"role": msg.role, "content": msg.content})
+        self.in_chat_selection = False
+        self.query_one("#status", Static).update(f"Chat: {chat.title} (ctrl+h for history)")
+
+    def create_new_chat(self):
+        """Create a new chat and enter it"""
+        if not self.storage:
+            return
+        title = f"Chat {len(self.chat_list) + 1}"
+        chat_id = self.storage.create_chat(title)
+        self.chat_list = self.storage.list_chats()
+        self.selected_chat_index = 0
+        # Find the new chat in the list
+        for idx, chat in enumerate(self.chat_list):
+            if chat.id == chat_id:
+                self.selected_chat_index = idx
+                break
+        self.load_selected_chat()
+
+    def delete_selected_chat(self):
+        """Delete the selected chat"""
+        if not self.chat_list or not self.storage:
+            return
+        chat = self.chat_list[self.selected_chat_index]
+        self.storage.delete_chat(chat.id)
+        self.chat_list = self.storage.list_chats()
+        if self.selected_chat_index >= len(self.chat_list):
+            self.selected_chat_index = max(0, len(self.chat_list) - 1)
+        self.show_chat_selection_menu()
 
     def _process_message(self, message: str) -> None:
         """Process a user message"""
@@ -440,17 +595,18 @@ class ChatApp(App):
     def _generate_response(self, user_message: str) -> None:
         """Generate response using RAG"""
         try:
-            # Add to conversation history
             self.conversation_history.append({"role": "user", "content": user_message})
 
             # Search for relevant documents
+            if not self.client:
+                raise ValueError("ChromaDB client not initialized")
+
             collection = self.client.get_or_create_collection(
-                name=self.collection_name, embedding_function=self.embedding_function
+                name=self.collection_name,
+                embedding_function=self.embedding_function
             )
 
             results = collection.query(query_texts=[user_message], n_results=4)
-
-            # Build system prompt with context
             system_prompt = self._build_system_prompt(results)
 
             # Prepare messages for LLM
@@ -499,7 +655,7 @@ class ChatApp(App):
             logger.error(f"Error generating response: {e}")
             self.call_from_thread(self._update_chat_with_response, f"Error: {str(e)}")
 
-    def _build_system_prompt(self, results: Dict[str, Any]) -> str:
+    def _build_system_prompt(self, results: Any) -> str:
         """Build system prompt with document context"""
         system_prompt = """
         ### Example
@@ -563,6 +719,9 @@ class ChatApp(App):
         """Update chat with assistant response"""
         chat_history = self.query_one("#chat-history", ChatHistory)
         chat_history.add_message(response, is_user=False, model_name=self.model)
+        # Save assistant response to storage
+        if self.storage and self.current_chat_id:
+            self.storage.add_message(self.current_chat_id, "assistant", response)
 
         # Update token display
         self._update_token_display()
@@ -583,6 +742,7 @@ def process_chat(
     embedding_ollama_port: int,
     ollama_host: str,
     ollama_port: int,
+    chat_db_path: Optional[str] = None,
 ) -> None:
     """Process chat operation"""
     # Disable logging during chat to prevent UI interference

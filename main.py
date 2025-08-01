@@ -139,12 +139,13 @@ def main():
             embedding_ollama_port=args.embedding_ollama_port,
             ollama_host=args.ollama_host,
             ollama_port=args.ollama_port,
+            chat_db_path=args.chat_db_path,
         )
 
     elif args.subparser == "web":
         process_web(
             client=client,
-            collection=args.collection,
+            collection_name=args.collection,
             llm=args.llm,
             model=args.model,
             embedding_model=args.embedding_model,
@@ -162,6 +163,7 @@ def main():
             max_history=args.max_history,
             timeout=args.timeout,
             workers=args.workers,
+            chat_db_path=args.chat_db_path,
         )
 
 

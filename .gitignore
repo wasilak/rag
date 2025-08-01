@@ -11,5 +11,6 @@ wheels/
 .venv
 
 db/**/*
+chat_history.db
 
 .env

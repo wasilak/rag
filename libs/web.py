@@ -1,9 +1,9 @@
 import os
 import logging
 import webbrowser
-from typing import List, Dict, Any, Optional, Callable, TypeVar, cast
+from typing import List, Dict, Any, Optional, Callable, TypeVar, cast, Generator
 from functools import wraps
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from openai import OpenAI
@@ -13,8 +13,12 @@ from chromadb.api import ClientAPI
 from .embedding import set_embedding_function
 from .utils import format_footnotes
 from .models import get_best_model
+from .chat_storage import ChatStorage
 
 logger = logging.getLogger("RAG")
+
+# Per-session chat state (sid -> {"current_chat_id": str|None, "conversation_history": list})
+chat_sessions = {}
 
 
 class WebChatManager:
@@ -33,6 +37,7 @@ class WebChatManager:
         ollama_host: str,
         ollama_port: int,
         max_history: int = 50,
+        chat_db_path: Optional[str] = None,
     ):
         self.client = client
         self.collection_name = collection_name
@@ -53,8 +58,14 @@ class WebChatManager:
         self.embedding_function = set_embedding_function(
             embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
         )
-        self.conversation_history: List[Dict[str, str]] = []
         self.tokenizer = self._get_tokenizer()
+        self.storage = ChatStorage(chat_db_path) if chat_db_path else None
+
+        # Remove global current_chat_id and conversation_history
+        # Use per-session state in handlers below
+
+        # Auto-load latest chat from storage if available (for legacy, not used in web)
+        # (No-op for per-session)
 
     def _create_llm_client(self) -> OpenAI:
         """Create LLM client based on the provider"""
@@ -177,16 +188,22 @@ class WebChatManager:
 
         return system_prompt
 
-    def generate_response_stream(self, user_message: str):
-        """Generate streaming response using RAG"""
+    def generate_response_stream(self, user_message: str) -> Generator[str, None, Optional[str]]:
+        """Generate streaming response using RAG. Returns new_chat_id if created."""
+        new_chat_id = None
         try:
             # Add to conversation history
             self.conversation_history.append({"role": "user", "content": user_message})
-            self._trim_conversation_history()
+            if self.storage:
+                new_chat_id = self._save_message("user", user_message)
 
             # Search for relevant documents
+            if not self.client:
+                raise ValueError("ChromaDB client not initialized")
+
             collection = self.client.get_or_create_collection(
-                name=self.collection_name, embedding_function=self.embedding_function
+                name=self.collection_name,
+                embedding_function=self.embedding_function
             )
 
             results = collection.query(query_texts=[user_message], n_results=4)
@@ -223,11 +240,15 @@ class WebChatManager:
                 self.conversation_history.append(
                     {"role": "assistant", "content": full_response}
                 )
+                self._save_message("assistant", full_response)
                 self._trim_conversation_history()
+
+            return new_chat_id
 
         except Exception as e:
             logger.error(f"Error generating streaming response: {e}")
             yield f"Error: {str(e)}"
+            return None
 
     def _trim_conversation_history(self):
         """Trim conversation history to max_history length"""
@@ -240,6 +261,71 @@ class WebChatManager:
     def clear_conversation(self):
         """Clear conversation history"""
         self.conversation_history.clear()
+        if self.storage and self.current_chat_id:
+            self.current_chat_id = None
+
+    def _load_chat(self, chat_id: str) -> bool:
+        """Load chat from storage"""
+        if not self.storage:
+            return False
+
+        chat = self.storage.get_chat(chat_id)
+        if not chat:
+            return False
+
+        self.conversation_history = [
+            {"role": msg.role, "content": msg.content}
+            for msg in chat.messages
+        ]
+        self.current_chat_id = chat_id
+        return True
+
+    def list_chats(self) -> List[Dict[str, Any]]:
+        """List all available chats"""
+        if not self.storage:
+            return []
+
+        chats = self.storage.list_chats()
+        return [{
+            "id": chat.id,
+            "title": chat.title,
+            "created_at": chat.created_at.isoformat(),
+            "last_updated": chat.last_updated.isoformat()
+        } for chat in chats]
+
+    def _save_message(self, role: str, content: str) -> Optional[str]:
+        """Save message to storage if enabled. Returns new chat_id if created."""
+        if not self.storage:
+            return None
+
+        new_chat_id = None
+        if not self.current_chat_id:
+            # This shouldn't happen with the new approach, but keep for safety
+            trimmed = content.strip().replace('\n', ' ')
+            if len(trimmed) > 100:
+                title = trimmed[:100].rstrip() + "..."
+            else:
+                title = trimmed
+            self.current_chat_id = self.storage.create_chat(title)
+            new_chat_id = self.current_chat_id
+        else:
+            # Update chat title with first user message if it's still "New Chat"
+            if role == "user":
+                chat = self.storage.get_chat(self.current_chat_id)
+                if chat and chat.title == "New Chat":
+                    trimmed = content.strip().replace('\n', ' ')
+                    if len(trimmed) > 100:
+                        title = trimmed[:100].rstrip() + "..."
+                    else:
+                        title = trimmed
+                    self.storage.update_chat_title(self.current_chat_id, title)
+
+        self.storage.add_message(
+            self.current_chat_id,
+            role,
+            content
+        )
+        return new_chat_id
 
     def get_config(self) -> Dict[str, Any]:
         """Get current configuration"""
@@ -251,17 +337,58 @@ class WebChatManager:
             "embedding_llm": self.embedding_llm,
         }
 
+    def _generate_chat_summary(self, messages: List[Any]) -> str:
+        """Generate a summary of the chat conversation using LLM"""
+        if not messages:
+            return "No messages to summarize."
+        
+        # Build conversation text for summarization
+        conversation_text = ""
+        for msg in messages:
+            role = "User" if msg.role == "user" else "Assistant"
+            conversation_text += f"{role}: {msg.content}\n\n"
+        
+        # Create prompt for summarization
+        summary_prompt = f"""Please provide a comprehensive summary of the following conversation. The summary should capture the key points, decisions made, and important information discussed. Make it concise but informative.
+
+Conversation:
+{conversation_text}
+
+Summary:"""
+        
+        try:
+            # Generate summary using LLM
+            response = self.llm_client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that creates concise but comprehensive summaries of conversations."},
+                    {"role": "user", "content": summary_prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.3
+            )
+            
+            summary = response.choices[0].message.content.strip()
+            return summary if summary else "Unable to generate summary."
+            
+        except Exception as e:
+            logger.error(f"Error generating chat summary: {e}")
+            return f"Error generating summary: {str(e)}"
+
 
 # Global chat manager instance
 chat_manager: Optional[WebChatManager] = None
 # Type alias for route functions
 RouteFunc = TypeVar('RouteFunc', bound=Callable[..., Any])
 
+
 def _require_chat_manager(f: RouteFunc) -> RouteFunc:
     """Decorator to ensure chat manager is initialized"""
     @wraps(f)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        assert chat_manager is not None, "Chat manager must be initialized"
+        if chat_manager is None:
+            from flask import jsonify
+            return jsonify({"error": "Chat manager not initialized"}), 500
         return f(*args, **kwargs)
     return cast(RouteFunc, wrapper)
 
@@ -282,6 +409,7 @@ def _configure_cors(app: Flask, cors_origins: str, port: int, host: str) -> None
 
     CORS(app, origins=allowed_origins, supports_credentials=True)
 
+
 def _initialize_chat_manager(
     client: ClientAPI,
     collection_name: str,
@@ -294,52 +422,164 @@ def _initialize_chat_manager(
     ollama_host: str,
     ollama_port: int,
     max_history: int,
+    chat_db_path: Optional[str] = None,
 ) -> None:
     """Initialize the global chat manager"""
     global chat_manager
     chat_manager = WebChatManager(
         client, collection_name, llm, model, embedding_model,
         embedding_llm, embedding_ollama_host, embedding_ollama_port,
-        ollama_host, ollama_port, max_history
+        ollama_host, ollama_port, max_history, chat_db_path
     )
 
-def setup_routes(app: Flask) -> None:
+
+def setup_routes(app: Flask) -> None:  # noqa: C901
     """Set up Flask routes"""
-    @app.route("/")
-    def serve_index() -> Any:
-        """Serve React app"""
-        if app.static_folder is None:
-            raise RuntimeError("Static folder not configured")
-        return send_from_directory(app.static_folder, "index.html")
+
+    @app.route("/api/chats", methods=["GET"])
+    @_require_chat_manager
+    def list_chats():
+        """List all available chats"""
+        return jsonify(chat_manager.list_chats())
+
+    @app.route("/api/chats/<chat_id>", methods=["GET"])
+    @_require_chat_manager
+    def load_chat(chat_id: str):
+        """Load specific chat"""
+        if chat_manager._load_chat(chat_id):
+            return jsonify({"success": True})
+        return jsonify({"success": False}), 404
+
+    @app.route("/api/chats", methods=["POST"])
+    @_require_chat_manager
+    def create_chat():
+        """Create a new chat"""
+        if not chat_manager.storage:
+            return jsonify({"success": False, "error": "Storage not available"}), 500
+
+        # Create a new chat with a placeholder title
+        chat_id = chat_manager.storage.create_chat("New Chat")
+        chat = chat_manager.storage.get_chat(chat_id)
+        if chat:
+            return jsonify({
+                "id": chat.id,
+                "title": chat.title,
+                "created_at": chat.created_at.isoformat(),
+                "last_updated": chat.last_updated.isoformat()
+            })
+        else:
+            return jsonify({"success": False, "error": "Failed to create chat"}), 500
+
+    @app.route("/api/chats/<chat_id>", methods=["DELETE"])
+    @_require_chat_manager
+    def delete_chat(chat_id: str):
+        """Delete a chat and its messages"""
+        if chat_manager.storage and chat_manager.storage.delete_chat(chat_id):
+            return jsonify({"success": True})
+        return jsonify({"success": False}), 404
 
     @app.route("/api/config")
     @_require_chat_manager
     def get_config() -> Any:
         """Get current configuration"""
-        assert chat_manager is not None
         return jsonify(chat_manager.get_config())
 
     @app.route("/api/tokens")
     @_require_chat_manager
     def get_tokens() -> Any:
-        """Get token statistics"""
-        assert chat_manager is not None
-        return jsonify(chat_manager.count_conversation_tokens())
+        chat_id = request.args.get("chat_id")
+        if not chat_id or not chat_manager.storage:
+            return jsonify({"total": 0, "user": 0, "assistant": 0, "messages": 0})
+        chat = chat_manager.storage.get_chat(chat_id)
+        if not chat:
+            return jsonify({"total": 0, "user": 0, "assistant": 0, "messages": 0})
+        # Count tokens
+        total_tokens = 0
+        user_tokens = 0
+        assistant_tokens = 0
+        for msg in chat.messages:
+            tokens = chat_manager._count_tokens(msg.content)
+            total_tokens += tokens
+            if msg.role == "user":
+                user_tokens += tokens
+            else:
+                assistant_tokens += tokens
+        return jsonify({
+            "total": total_tokens,
+            "user": user_tokens,
+            "assistant": assistant_tokens,
+            "messages": len(chat.messages)
+        })
 
     @app.route("/api/history")
     @_require_chat_manager
     def get_history() -> Any:
-        """Get conversation history"""
-        assert chat_manager is not None
-        return jsonify({"history": chat_manager.conversation_history})
+        chat_id = request.args.get("chat_id")
+        if not chat_id or not chat_manager.storage:
+            return jsonify({"history": []})
+        chat = chat_manager.storage.get_chat(chat_id)
+        if not chat:
+            return jsonify({"history": []})
+        return jsonify({"history": [
+            {"role": msg.role, "content": msg.content}
+            for msg in chat.messages
+        ]})
 
     @app.route("/api/clear", methods=["POST"])
     @_require_chat_manager
     def clear_chat() -> Any:
         """Clear conversation history"""
-        assert chat_manager is not None
         chat_manager.clear_conversation()
         return jsonify({"status": "cleared"})
+
+    @app.route("/api/chats/<chat_id>/summarize", methods=["POST"])
+    @_require_chat_manager
+    def summarize_chat(chat_id: str) -> Any:
+        """Summarize and compact a chat conversation"""
+        if not chat_manager.storage:
+            return jsonify({"success": False, "error": "Storage not available"}), 500
+        
+        chat = chat_manager.storage.get_chat(chat_id)
+        if not chat:
+            return jsonify({"success": False, "error": "Chat not found"}), 404
+        
+        if len(chat.messages) < 2:
+            return jsonify({"success": False, "error": "Not enough messages to summarize"}), 400
+        
+        try:
+            # Generate summary using LLM
+            summary = chat_manager._generate_chat_summary(chat.messages)
+            
+            # Replace all messages with the summary
+            success = chat_manager.storage.replace_with_summary(chat_id, summary)
+            
+            if not success:
+                return jsonify({"success": False, "error": "Failed to replace messages with summary"}), 500
+            
+            return jsonify({
+                "success": True,
+                "history": [{"role": "assistant", "content": summary}]
+            })
+        except Exception as e:
+            logger.error(f"Failed to summarize chat {chat_id}: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    # React app routes - must come after API routes
+    @app.route("/")
+    def serve_index() -> Any:
+        """Serve React app"""
+        # index.html is in the parent directory of the static folder
+        index_folder = os.path.dirname(app.static_folder)
+        print(f"Serving index.html from: {index_folder}")
+        return send_from_directory(index_folder, "index.html")
+
+    @app.route("/<path:path>")
+    def serve_react_app(path: str) -> Any:
+        """Serve React app for all other routes (client-side routing)"""
+        # index.html is in the parent directory of the static folder
+        index_folder = os.path.dirname(app.static_folder)
+        return send_from_directory(index_folder, "index.html")
+
 
 def create_app(
     client: ClientAPI,
@@ -359,9 +599,17 @@ def create_app(
     max_history: int = 50,
     timeout: int = 300,
     debug: bool = False,
-) -> Flask:
+    chat_db_path: Optional[str] = None,
+) -> Flask:  # noqa: C901
     """Create and configure Flask app"""
-    app = Flask(__name__, static_folder="../web/build", static_url_path="")
+    import os
+    # Get the absolute path to the static folder relative to the project root
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    static_folder_path = os.path.join(project_root, "web", "build", "static")
+    print(f"Static folder path: {static_folder_path}")
+    print(f"Static folder exists: {os.path.exists(static_folder_path)}")
+    app = Flask(__name__, static_folder=static_folder_path, static_url_path="/static")
     app.config["SECRET_KEY"] = secret_key
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # Disable caching in development
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max request size
@@ -388,17 +636,62 @@ def create_app(
 
     # Initialize chat manager
     _initialize_chat_manager(
-        client, collection_name, llm, model, embedding_model,
-        embedding_llm, embedding_ollama_host, embedding_ollama_port,
-        ollama_host, ollama_port, max_history
+        client=client,
+        collection_name=collection_name,
+        llm=llm,
+        model=model,
+        embedding_model=embedding_model,
+        embedding_llm=embedding_llm,
+        embedding_ollama_host=embedding_ollama_host,
+        embedding_ollama_port=embedding_ollama_port,
+        ollama_host=ollama_host,
+        ollama_port=ollama_port,
+        max_history=max_history,
+        chat_db_path=chat_db_path
     )
 
     # Set up routes
     setup_routes(app)
 
+    @socketio.on("reset_chat")
+    def handle_reset_chat():
+        from flask import request  # type: ignore[import]
+        sid = request.sid  # type: ignore[attr-defined]
+        if sid not in chat_sessions:
+            chat_sessions[sid] = {"current_chat_id": None, "conversation_history": []}
+        else:
+            chat_sessions[sid]["current_chat_id"] = None
+            chat_sessions[sid]["conversation_history"] = []
+        emit("chat_reset", {"status": "reset"})
+
+    @socketio.on("switch_chat")
+    def handle_switch_chat(data):
+        """Switch to a different chat for current session"""
+        from flask import request  # type: ignore[import]
+        sid = request.sid  # type: ignore[attr-defined]
+        chat_id = data.get("chat_id")
+
+        if not chat_id:
+            return
+
+        # Load the chat into the session
+        if chat_manager and chat_manager._load_chat(chat_id):
+            chat_sessions[sid] = {
+                "current_chat_id": chat_manager.current_chat_id,
+                "conversation_history": chat_manager.conversation_history
+            }
+            logger.info(f"Switched session {sid} to chat {chat_id}")
+        else:
+            logger.error(f"Failed to load chat {chat_id} for session {sid}")
+
     @socketio.on("send_message")
     def handle_message(data):
         """Handle incoming chat message with streaming response"""
+        from flask import request  # type: ignore[import]
+        sid = request.sid  # type: ignore[attr-defined]
+        if sid not in chat_sessions:
+            chat_sessions[sid] = {"current_chat_id": None, "conversation_history": []}
+
         user_message = data.get("message", "").strip()
         if not user_message:
             return
@@ -408,16 +701,42 @@ def create_app(
 
         # Generate streaming response
         try:
-            assert chat_manager is not None, "Chat manager must be initialized"
-            for chunk in chat_manager.generate_response_stream(user_message):
-                emit("message_chunk", {"chunk": chunk})
+            if chat_manager is None:
+                emit("message_error", {"error": "Chat manager not initialized"})
+                return
 
-            # Emit completion with token stats
+            # Patch chat_manager to use per-session state
+            chat_manager.current_chat_id = chat_sessions[sid]["current_chat_id"]
+            chat_manager.conversation_history = chat_sessions[sid]["conversation_history"]
+
+            stream = chat_manager.generate_response_stream(user_message)
+            new_chat_id = None
+            for chunk in stream:
+                emit("message_chunk", {"chunk": chunk})
+            # After streaming is done, get the new_chat_id if any (from generator return value)
+            try:
+                stream.send(None)
+            except StopIteration as e:
+                if hasattr(e, 'value'):
+                    new_chat_id = e.value
+
+            # Save back per-session state
+            chat_sessions[sid]["current_chat_id"] = chat_manager.current_chat_id
+            chat_sessions[sid]["conversation_history"] = chat_manager.conversation_history
+
             token_stats = chat_manager.count_conversation_tokens()
             emit("message_complete", {
                 "status": "complete",
-                "tokens": token_stats
+                "tokens": token_stats,
+                "newChatId": new_chat_id
             })
+
+            # If we updated a chat title, emit a refresh signal
+            if new_chat_id is None and chat_manager.current_chat_id:
+                # Check if the current chat title was updated
+                chat = chat_manager.storage.get_chat(chat_manager.current_chat_id) if chat_manager.storage else None
+                if chat and chat.title != "New Chat":
+                    emit("chat_title_updated", {"chatId": chat_manager.current_chat_id, "title": chat.title})
         except Exception as e:
             logger.error(f"Error in message handling: {e}")
             emit("message_error", {"error": str(e)})
@@ -429,7 +748,7 @@ def create_app(
         emit("connected", {"status": "connected"})
 
     @socketio.on("disconnect")
-    def handle_disconnect():
+    def handle_disconnect(_unused=None):
         """Handle client disconnection"""
         logger.info("Client disconnected from WebSocket")
 
@@ -452,7 +771,7 @@ def create_app(
 
 def process_web(
     client: ClientAPI,
-    collection: str,
+    collection_name: str,
     llm: str,
     model: str,
     embedding_model: str,
@@ -461,8 +780,8 @@ def process_web(
     embedding_ollama_port: int,
     ollama_host: str,
     ollama_port: int,
-    port: int = 8080,
     host: str = "127.0.0.1",
+    port: int = 8080,
     debug: bool = False,
     browser: bool = False,
     cors_origins: str = "",
@@ -470,6 +789,7 @@ def process_web(
     max_history: int = 50,
     timeout: int = 300,
     workers: int = 1,
+    chat_db_path: Optional[str] = None,
 ) -> None:
     """Process web command"""
     # Check if web interface is available
@@ -480,13 +800,27 @@ def process_web(
         logger.info("Web interface will not be available")
         return
 
-    logger.info(f"Starting web interface for collection '{collection}'")
+    logger.info(f"Starting web interface for collection '{collection_name}'")
 
     app = create_app(
-        client, collection, llm, model, embedding_model,
-        embedding_llm, embedding_ollama_host, embedding_ollama_port,
-        ollama_host, ollama_port, port, host, cors_origins, secret_key, max_history, timeout,
-        debug
+        client=client,
+        collection_name=collection_name,
+        llm=llm,
+        model=model,
+        embedding_model=embedding_model,
+        embedding_llm=embedding_llm,
+        embedding_ollama_host=embedding_ollama_host,
+        embedding_ollama_port=embedding_ollama_port,
+        ollama_host=ollama_host,
+        ollama_port=ollama_port,
+        port=port,
+        host=host,
+        cors_origins=cors_origins,
+        secret_key=secret_key,
+        max_history=max_history,
+        timeout=timeout,
+        debug=debug,
+        chat_db_path=chat_db_path
     )
 
     # Start the server
