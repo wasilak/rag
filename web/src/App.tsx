@@ -1,5 +1,24 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Routes, Route, useParams, Navigate } from "react-router-dom";
+// Disable root view transitions (for Chrome View Transitions API)
+const style = document.createElement("style");
+style.innerHTML = `
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none !important;
+}
+`;
+document.head.appendChild(style);
+
+import {
+  Routes,
+  Route,
+  useParams,
+  Navigate,
+  useNavigate,
+  NavLink,
+  useLocation,
+} from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ThemeProvider,
   CssBaseline,
@@ -12,16 +31,9 @@ import {
   Chip,
   Alert,
   Snackbar,
-} from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import { Brightness4, Brightness7, SettingsBrightness, Info, Clear } from "@mui/icons-material";
-
-import { createTokyoNightTheme } from "./theme/tokyoNight";
-import ChatInterface from "./components/ChatInterface";
-import { webSocketService, apiService, ChatConfig, TokenStats } from "./services/websocket";
-import {
   Drawer,
   List,
+  ListItem,
   ListItemText,
   ListItemSecondaryAction,
   IconButton as MuiIconButton,
@@ -33,8 +45,15 @@ import {
   Button,
   ListItemButton,
 } from "@mui/material";
+import { Brightness4, Brightness7, SettingsBrightness, Info, Clear } from "@mui/icons-material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ChatIcon from "@mui/icons-material/Chat";
+
+import { createTokyoNightTheme } from "./theme/tokyoNight";
+import ChatInterface from "./components/ChatInterface";
+import ChatWindow from "./components/ChatWindow";
+
+import { webSocketService, apiService, ChatConfig, TokenStats } from "./services/websocket";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -59,7 +78,7 @@ const ChatRouteWrapper: React.FC<{
     modelName?: string;
   }[];
   chatList: { id: string; title: string; created_at: string; last_updated: string }[];
-  currentChatId: string | null;
+
   deleteDialogOpen: boolean;
   chatToDelete: string | null;
   summarizing: boolean;
@@ -92,7 +111,7 @@ const ChatRouteWrapper: React.FC<{
   setIsProcessing: React.Dispatch<React.SetStateAction<boolean>>;
   handleThemeChange: () => void;
   handleClearChat: () => Promise<void>;
-  handleSummarizeChat: () => Promise<void>;
+  handleSummarizeChat: (chatIdFromUrl: string | null) => Promise<void>;
   handleNewChat: () => Promise<void>;
   refreshChatList: () => Promise<void>;
   handleSwitchChat: (chatId: string) => Promise<void>;
@@ -112,11 +131,7 @@ const ChatRouteWrapper: React.FC<{
   }, [chatIdFromUrl, props.chatList]);
 
   // When a new chat is created, navigate to its URL
-  useEffect(() => {
-    if (props.currentChatId && chatIdFromUrl !== props.currentChatId) {
-      navigate(`/chat/${props.currentChatId}`, { replace: true });
-    }
-  }, [props.currentChatId]);
+  // (No longer needed: currentChatId prop is removed)
 
   // If no chatId in URL and no chats, show empty state
   if (!chatIdFromUrl && props.chatList.length === 0) {
@@ -127,19 +142,15 @@ const ChatRouteWrapper: React.FC<{
     );
   }
 
-  // If chatId in URL but not in chatList, show not found
+  // If chatId in URL but not in chatList, redirect to /chat
   if (chatIdFromUrl && !props.chatList.some((c) => c.id === chatIdFromUrl)) {
-    return (
-      <Box p={3}>
-        <Typography variant="h5">Chat not found.</Typography>
-      </Box>
-    );
+    return <Navigate to="/chat" replace />;
   }
 
   // Render main UI (sidebar, chat, etc) as before
   // (Insert the main App UI here, replacing all references to currentChatId with chatIdFromUrl)
   // We'll move the main App JSX into a function for clarity below.
-  return <MainAppUI {...props} currentChatId={chatIdFromUrl} />;
+  return <MainAppUI {...props} />;
 };
 
 /* (removed old App function, see below for new RoutedApp) */
@@ -149,6 +160,7 @@ const ChatRouteWrapper: React.FC<{
  * All props are passed through, and currentChatId is from URL.
  */
 function MainAppUI(props: any) {
+  console.log("[MainAppUI] render");
   const {
     themeMode,
     systemPrefersDark,
@@ -159,7 +171,6 @@ function MainAppUI(props: any) {
     showInfo,
     chatHistory,
     chatList,
-    currentChatId,
     deleteDialogOpen,
     chatToDelete,
     summarizing,
@@ -204,9 +215,10 @@ function MainAppUI(props: any) {
 
   // Load chat content when URL param changes
   useEffect(() => {
-    if (chatIdFromUrl && chatIdFromUrl !== currentChatId) {
+    if (chatIdFromUrl) {
       handleSwitchChat(chatIdFromUrl);
     }
+    // eslint-disable-next-line
   }, [chatIdFromUrl]);
 
   const getThemeIcon = () => {
@@ -306,19 +318,41 @@ function MainAppUI(props: any) {
               New Chat
             </Button>
 
-            <Button
-              startIcon={
-                <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 18 }}>
-                  Σ
-                </Typography>
-              }
-              onClick={handleSummarizeChat}
-              disabled={!currentChatId || summarizing}
-              sx={{ ml: 2 }}
-              variant="outlined"
-            >
-              Summarize & Compact
-            </Button>
+            {(() => {
+              const chat = chatList.find((c: any) => c.id === chatIdFromUrl);
+              const canSummarize =
+                !!chatIdFromUrl && !!chat && chatHistory.length >= 2 && !summarizing;
+              console.log(
+                "[Summarize Button] chatIdFromUrl:",
+                chatIdFromUrl,
+                "chat:",
+                chat,
+                "chatHistory.length:",
+                chatHistory.length,
+                "summarizing:",
+                summarizing,
+                "canSummarize:",
+                canSummarize,
+              );
+              return (
+                <Button
+                  startIcon={
+                    <Typography variant="body2" sx={{ fontWeight: 700, fontSize: 18 }}>
+                      Σ
+                    </Typography>
+                  }
+                  onClick={() => {
+                    console.log("Button clicked!");
+                    handleSummarizeChat(chatIdFromUrl);
+                  }}
+                  disabled={!canSummarize}
+                  sx={{ ml: 2 }}
+                  variant="outlined"
+                >
+                  Summarize & Compact
+                </Button>
+              );
+            })()}
 
             <Tooltip title="Show info">
               <IconButton
@@ -381,32 +415,16 @@ function MainAppUI(props: any) {
                   </ListItemButton>
                 )}
                 {chatList.map((chat: any) => (
-                  <ListItemButton
+                  <ListItem
                     key={chat.id}
-                    selected={chat.id === currentChatId}
-                    onClick={() => {
-                      // Use navigate to update browser history and URL
-                      navigate(`/chat/${chat.id}`);
-                    }}
-                    sx={{ display: "flex", alignItems: "flex-start" }}
-                  >
-                    <ChatIcon sx={{ mr: 1, mt: 0.5 }} />
-                    <ListItemText
-                      primary={chat.title}
-                      secondary={
-                        <>
-                          <span>Created: {new Date(chat.created_at).toLocaleString()}</span>
-                          <br />
-                          <span>Updated: {new Date(chat.last_updated).toLocaleString()}</span>
-                        </>
-                      }
-                    />
-                    <ListItemSecondaryAction>
+                    disablePadding
+                    secondaryAction={
                       <MuiIconButton
                         edge="end"
                         aria-label="delete"
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log("Delete button clicked for chat id:", chat.id);
                           setChatToDelete(chat.id);
                           setDeleteDialogOpen(true);
                         }}
@@ -414,49 +432,86 @@ function MainAppUI(props: any) {
                       >
                         <DeleteIcon />
                       </MuiIconButton>
-                    </ListItemSecondaryAction>
-                  </ListItemButton>
+                    }
+                  >
+                    <ListItemButton
+                      component={NavLink}
+                      to={`/chat/${chat.id}`}
+                      selected={chat.id === chatIdFromUrl}
+                      sx={{ display: "flex", alignItems: "flex-start" }}
+                    >
+                      <ChatIcon sx={{ mr: 1, mt: 0.5 }} />
+                      <ListItemText
+                        primary={chat.title}
+                        secondary={
+                          <>
+                            <span>Created: {new Date(chat.created_at).toLocaleString()}</span>
+                            <br />
+                            <span>Updated: {new Date(chat.last_updated).toLocaleString()}</span>
+                          </>
+                        }
+                      />
+                    </ListItemButton>
+                  </ListItem>
                 ))}
               </List>
             </Box>
 
             {/* Main Chat Interface */}
             <Box sx={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
-              <ChatInterface
-                onClearChat={handleClearChat}
-                messages={chatHistory}
-                isProcessing={isProcessing}
-                streamingContent={streamingContent}
-                pendingUserMessage={pendingUserMessage}
-                onSendMessage={(message: string) => {
-                  setStreamingContent(""); // Clear before sending new message
-                  props.setIsProcessing(true);
-                  setPendingUserMessage(null);
+              <AnimatePresence mode="wait">
+                <motion.div
+                  className="chat-fade"
+                  key={chatIdFromUrl}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ height: "100%" }}
+                >
+                  <ChatInterface
+                    onClearChat={handleClearChat}
+                    messages={chatHistory}
+                    isProcessing={isProcessing}
+                    streamingContent={streamingContent}
+                    pendingUserMessage={pendingUserMessage}
+                    onSendMessage={(message: string) => {
+                      setStreamingContent(""); // Clear before sending new message
+                      props.setIsProcessing(true);
+                      setPendingUserMessage(null);
 
-                  // Only optimistically add user message if this is an existing chat
-                  if (currentChatId) {
-                    setChatHistory((prev: any) => [
-                      ...prev,
-                      {
-                        id: String(Date.now()),
-                        content: message,
-                        isUser: true,
-                        timestamp: new Date(),
-                      },
-                    ]);
-                  } else {
-                    // For new chats, show pending user message until backend responds
-                    setPendingUserMessage(message);
-                  }
-                  webSocketService.sendMessage(message);
-                }}
-              />
+                      // Only optimistically add user message if this is an existing chat
+                      if (chatIdFromUrl) {
+                        setChatHistory((prev: any) => [
+                          ...prev,
+                          {
+                            id: String(Date.now()),
+                            content: message,
+                            isUser: true,
+                            timestamp: new Date(),
+                          },
+                        ]);
+                      } else {
+                        // For new chats, show pending user message until backend responds
+                        setPendingUserMessage(message);
+                      }
+                      webSocketService.sendMessage(message);
+                    }}
+                  />
+                </motion.div>
+              </AnimatePresence>
             </Box>
           </Box>
         </Box>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <Dialog
+          open={deleteDialogOpen}
+          onClose={() => {
+            setDeleteDialogOpen(false);
+            setChatToDelete(null);
+          }}
+        >
           <DialogTitle>Delete Chat</DialogTitle>
           <DialogContent>
             <DialogContentText>
@@ -464,11 +519,24 @@ function MainAppUI(props: any) {
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setDeleteDialogOpen(false)} color="primary">
+            <Button
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setChatToDelete(null);
+              }}
+              color="primary"
+            >
               Cancel
             </Button>
             <Button
-              onClick={() => chatToDelete && handleDeleteChat(chatToDelete)}
+              onClick={() => {
+                console.log("Delete confirmed for chat id:", chatToDelete);
+                if (chatToDelete) {
+                  handleDeleteChat(chatToDelete);
+                  setDeleteDialogOpen(false);
+                  setChatToDelete(null);
+                }
+              }}
               color="error"
               variant="contained"
             >
@@ -532,6 +600,8 @@ const RoutedApp: React.FC = () => {
   // Use React Router's useNavigate for navigation
   // (must be inside the component)
   const navigate = require("react-router-dom").useNavigate();
+  const params = require("react-router-dom").useParams();
+  const chatIdFromUrl = params.id || null;
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -596,14 +666,15 @@ const RoutedApp: React.FC = () => {
         if (data && data.newChatId) {
           setCurrentChatId(data.newChatId);
           await refreshChatList();
-          await handleSwitchChat(data.newChatId);
-        } else if (currentChatId) {
+          // navigate to new chatId (ensure URL updates)
+          navigate(`/chat/${data.newChatId}`);
+        } else {
           await refreshChatList();
-          await handleSwitchChat(currentChatId);
         }
       }
     });
-  }, [currentChatId, pendingChatId]);
+    // eslint-disable-next-line
+  }, [pendingChatId]);
 
   useEffect(() => {
     webSocketService.onConnectionChange(setConnected);
@@ -634,11 +705,26 @@ const RoutedApp: React.FC = () => {
     }
   };
 
-  const handleSummarizeChat = async () => {
-    if (!currentChatId) return;
+  const handleSummarizeChat = async (chatIdFromUrl: string | null) => {
+    const chat = chatList.find((c: any) => c.id === chatIdFromUrl);
+    if (!chatIdFromUrl || !chat || chatHistory.length < 2) {
+      console.log(
+        "[Summarize] Not allowed: chatIdFromUrl",
+        chatIdFromUrl,
+        "chat exists?",
+        !!chat,
+        "messages:",
+        chatHistory.length,
+      );
+      return;
+    }
+    console.log("[Summarize] Handler called for chatId:", chatIdFromUrl);
     setSummarizing(true);
+    console.log("[Summarize] Set summarizing to true");
     try {
-      const resp = await apiService.summarizeChat(currentChatId);
+      console.log("[Summarize] Calling apiService.summarizeChat with chatId:", chatIdFromUrl);
+      const resp = await apiService.summarizeChat(chatIdFromUrl);
+      console.log("[Summarize] API response:", resp);
       if (resp.success && Array.isArray(resp.history)) {
         const mapped = resp.history.map((item, idx) => ({
           id: String(idx) + "-" + String(Date.now()),
@@ -648,14 +734,17 @@ const RoutedApp: React.FC = () => {
         }));
         setChatHistory(mapped);
         setError(null);
+        console.log("[Summarize] setChatHistory called, error cleared");
       } else {
         setError("Failed to summarize chat");
+        console.log("[Summarize] Failed to summarize chat, resp:", resp);
       }
     } catch (err) {
-      console.error("Summarize chat error:", err);
+      console.error("[Summarize] Summarize chat error:", err);
       setError("Failed to summarize chat");
     } finally {
       setSummarizing(false);
+      console.log("[Summarize] Set summarizing to false (finally)");
     }
   };
 
@@ -727,21 +816,20 @@ const RoutedApp: React.FC = () => {
   };
 
   const handleDeleteChat = async (chatId: string) => {
+    console.log("handleDeleteChat called with chatId:", chatId);
     try {
       const resp = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
-      const data = await resp.json();
-      if (data.success) {
+      if (resp.ok) {
         setDeleteDialogOpen(false);
         setChatToDelete(null);
         await refreshChatList();
-        if (currentChatId === chatId) {
-          if (chatList.length > 1) {
-            const next = chatList.find((c) => c.id !== chatId);
-            if (next) navigate(`/chat/${next.id}`);
-          } else {
-            setChatHistory([]);
-            setCurrentChatId(null);
-          }
+        // Use chatIdFromUrl as the current chat id
+        const params = require("react-router-dom").useParams?.() || {};
+        const chatIdFromUrl = params.id || null;
+        if (chatIdFromUrl === chatId) {
+          // Always navigate to /chat/ after deleting the current chat
+          navigate("/chat/", { replace: true });
+          setChatHistory([]);
         }
       } else {
         setError("Failed to delete chat");
@@ -765,113 +853,122 @@ const RoutedApp: React.FC = () => {
         .join("\n")
     : "";
 
-  return (
-    <Routes>
-      <Route
-        path="/chat/:id"
-        element={
-          <MainAppUI
-            themeMode={themeMode}
-            systemPrefersDark={systemPrefersDark}
-            config={config}
-            tokenStats={tokenStats}
-            connected={connected}
-            error={error}
-            showInfo={showInfo}
-            chatHistory={chatHistory}
-            chatList={chatList}
-            currentChatId={currentChatId}
-            deleteDialogOpen={deleteDialogOpen}
-            chatToDelete={chatToDelete}
-            summarizing={summarizing}
-            creatingChat={creatingChat}
-            streamingContent={streamingContent}
-            pendingUserMessage={pendingUserMessage}
-            pendingChatId={pendingChatId}
-            isProcessing={isProcessing}
-            setThemeMode={setThemeMode}
-            setSystemPrefersDark={setSystemPrefersDark}
-            setConfig={setConfig}
-            setTokenStats={setTokenStats}
-            setConnected={setConnected}
-            setError={setError}
-            setShowInfo={setShowInfo}
-            setChatHistory={setChatHistory}
-            setChatList={setChatList}
-            setCurrentChatId={setCurrentChatId}
-            setDeleteDialogOpen={setDeleteDialogOpen}
-            setChatToDelete={setChatToDelete}
-            setSummarizing={setSummarizing}
-            setCreatingChat={setCreatingChat}
-            setStreamingContent={setStreamingContent}
-            setPendingUserMessage={setPendingUserMessage}
-            setPendingChatId={setPendingChatId}
-            setIsProcessing={setIsProcessing}
-            handleThemeChange={handleThemeChange}
-            handleClearChat={handleClearChat}
-            handleSummarizeChat={handleSummarizeChat}
-            handleNewChat={handleNewChat}
-            refreshChatList={refreshChatList}
-            handleSwitchChat={handleSwitchChat}
-            handleDeleteChat={handleDeleteChat}
-            infoText={infoText}
-          />
-        }
-      />
-      <Route
-        path="/chat"
-        element={
-          <MainAppUI
-            themeMode={themeMode}
-            systemPrefersDark={systemPrefersDark}
-            config={config}
-            tokenStats={tokenStats}
-            connected={connected}
-            error={error}
-            showInfo={showInfo}
-            chatHistory={chatHistory}
-            chatList={chatList}
-            currentChatId={currentChatId}
-            deleteDialogOpen={deleteDialogOpen}
-            chatToDelete={chatToDelete}
-            summarizing={summarizing}
-            creatingChat={creatingChat}
-            streamingContent={streamingContent}
-            pendingUserMessage={pendingUserMessage}
-            pendingChatId={pendingChatId}
-            isProcessing={isProcessing}
-            setThemeMode={setThemeMode}
-            setSystemPrefersDark={setSystemPrefersDark}
-            setConfig={setConfig}
-            setTokenStats={setTokenStats}
-            setConnected={setConnected}
-            setError={setError}
-            setShowInfo={setShowInfo}
-            setChatHistory={setChatHistory}
-            setChatList={setChatList}
-            setCurrentChatId={setCurrentChatId}
-            setDeleteDialogOpen={setDeleteDialogOpen}
-            setChatToDelete={setChatToDelete}
-            setSummarizing={setSummarizing}
-            setCreatingChat={setCreatingChat}
-            setStreamingContent={setStreamingContent}
-            setPendingUserMessage={setPendingUserMessage}
-            setPendingChatId={setPendingChatId}
-            setIsProcessing={setIsProcessing}
-            handleThemeChange={handleThemeChange}
-            handleClearChat={handleClearChat}
-            handleSummarizeChat={handleSummarizeChat}
-            handleNewChat={handleNewChat}
-            refreshChatList={refreshChatList}
-            handleSwitchChat={handleSwitchChat}
-            handleDeleteChat={handleDeleteChat}
-            infoText={infoText}
-          />
-        }
-      />
+  // Import ViewTransitions from react-router-dom at the top if not already
+  // import { ViewTransitions } from "react-router-dom";
+  const location = useLocation();
 
-      <Route path="*" element={<Navigate to="/chat" replace />} />
-    </Routes>
+  const actualThemeMode =
+    themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
+  const theme = createTokyoNightTheme(actualThemeMode);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Routes location={location} key={location.pathname}>
+        <Route
+          path="/chat/:id"
+          element={
+            <ChatRouteWrapper
+              themeMode={themeMode}
+              systemPrefersDark={systemPrefersDark}
+              setThemeMode={setThemeMode}
+              setSystemPrefersDark={setSystemPrefersDark}
+              config={config}
+              tokenStats={tokenStats}
+              connected={connected}
+              error={error}
+              showInfo={showInfo}
+              chatHistory={chatHistory}
+              chatList={chatList}
+              deleteDialogOpen={deleteDialogOpen}
+              chatToDelete={chatToDelete}
+              summarizing={summarizing}
+              creatingChat={creatingChat}
+              streamingContent={streamingContent}
+              pendingUserMessage={pendingUserMessage}
+              pendingChatId={pendingChatId}
+              isProcessing={isProcessing}
+              setConfig={setConfig}
+              setTokenStats={setTokenStats}
+              setConnected={setConnected}
+              setError={setError}
+              setShowInfo={setShowInfo}
+              setChatHistory={setChatHistory}
+              setChatList={setChatList}
+              setCurrentChatId={setCurrentChatId}
+              setDeleteDialogOpen={setDeleteDialogOpen}
+              setChatToDelete={setChatToDelete}
+              setSummarizing={setSummarizing}
+              setCreatingChat={setCreatingChat}
+              setStreamingContent={setStreamingContent}
+              setPendingUserMessage={setPendingUserMessage}
+              setPendingChatId={setPendingChatId}
+              setIsProcessing={setIsProcessing}
+              handleThemeChange={handleThemeChange}
+              handleClearChat={handleClearChat}
+              handleSummarizeChat={handleSummarizeChat}
+              handleNewChat={handleNewChat}
+              refreshChatList={refreshChatList}
+              handleSwitchChat={handleSwitchChat}
+              handleDeleteChat={handleDeleteChat}
+              infoText={infoText}
+            />
+          }
+        />
+        <Route path="/chat" element={<Navigate to="/chat/" replace />} />
+        <Route
+          path="/chat/"
+          element={
+            <ChatRouteWrapper
+              themeMode={themeMode}
+              systemPrefersDark={systemPrefersDark}
+              setThemeMode={setThemeMode}
+              setSystemPrefersDark={setSystemPrefersDark}
+              config={config}
+              tokenStats={tokenStats}
+              connected={connected}
+              error={error}
+              showInfo={showInfo}
+              chatHistory={chatHistory}
+              chatList={chatList}
+              deleteDialogOpen={deleteDialogOpen}
+              chatToDelete={chatToDelete}
+              summarizing={summarizing}
+              creatingChat={creatingChat}
+              streamingContent={streamingContent}
+              pendingUserMessage={pendingUserMessage}
+              pendingChatId={pendingChatId}
+              isProcessing={isProcessing}
+              setConfig={setConfig}
+              setTokenStats={setTokenStats}
+              setConnected={setConnected}
+              setError={setError}
+              setShowInfo={setShowInfo}
+              setChatHistory={setChatHistory}
+              setChatList={setChatList}
+              setCurrentChatId={setCurrentChatId}
+              setDeleteDialogOpen={setDeleteDialogOpen}
+              setChatToDelete={setChatToDelete}
+              setSummarizing={setSummarizing}
+              setCreatingChat={setCreatingChat}
+              setStreamingContent={setStreamingContent}
+              setPendingUserMessage={setPendingUserMessage}
+              setPendingChatId={setPendingChatId}
+              setIsProcessing={setIsProcessing}
+              handleThemeChange={handleThemeChange}
+              handleClearChat={handleClearChat}
+              handleSummarizeChat={handleSummarizeChat}
+              handleNewChat={handleNewChat}
+              refreshChatList={refreshChatList}
+              handleSwitchChat={handleSwitchChat}
+              handleDeleteChat={handleDeleteChat}
+              infoText={infoText}
+            />
+          }
+        />
+        <Route path="*" element={<Navigate to="/chat" replace />} />
+      </Routes>
+    </ThemeProvider>
   );
 };
 
