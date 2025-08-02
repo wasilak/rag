@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  useNavigate,
-  useParams,
-  useLocation,
-  Navigate,
-} from "react-router-dom";
+import { Routes, Route, useParams, Navigate } from "react-router-dom";
 import {
   ThemeProvider,
   CssBaseline,
@@ -21,6 +13,7 @@ import {
   Alert,
   Snackbar,
 } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { Brightness4, Brightness7, SettingsBrightness, Info, Clear } from "@mui/icons-material";
 
 import { createTokyoNightTheme } from "./theme/tokyoNight";
@@ -110,17 +103,13 @@ const ChatRouteWrapper: React.FC<{
   const params = useParams();
   const chatIdFromUrl = params.id || null;
 
-  // Sync state to URL param (URL is source of truth)
+  // If no chatId in URL but there are chats, navigate to first chat
   useEffect(() => {
-    if (chatIdFromUrl && chatIdFromUrl !== props.currentChatId) {
-      props.handleSwitchChat(chatIdFromUrl);
-    }
-    // If no chatId in URL but there are chats, navigate to first chat
     if (!chatIdFromUrl && props.chatList.length > 0) {
       navigate(`/chat/${props.chatList[0].id}`, { replace: true });
     }
     // If no chats at all, stay on /chat
-  }, [chatIdFromUrl, props.currentChatId, props.chatList]);
+  }, [chatIdFromUrl, props.chatList]);
 
   // When a new chat is created, navigate to its URL
   useEffect(() => {
@@ -150,19 +139,16 @@ const ChatRouteWrapper: React.FC<{
   // Render main UI (sidebar, chat, etc) as before
   // (Insert the main App UI here, replacing all references to currentChatId with chatIdFromUrl)
   // We'll move the main App JSX into a function for clarity below.
-  return renderMainAppUI({
-    ...props,
-    currentChatId: chatIdFromUrl,
-  });
+  return <MainAppUI {...props} currentChatId={chatIdFromUrl} />;
 };
 
 /* (removed old App function, see below for new RoutedApp) */
 
 /**
- * Renders the main App UI, extracted for router integration.
+ * MainAppUI is a React component that renders the main App UI.
  * All props are passed through, and currentChatId is from URL.
  */
-function renderMainAppUI(props: any) {
+function MainAppUI(props: any) {
   const {
     themeMode,
     systemPrefersDark,
@@ -182,10 +168,18 @@ function renderMainAppUI(props: any) {
     pendingUserMessage,
     isProcessing,
     setThemeMode,
+    setSystemPrefersDark,
+    setConfig,
+    setTokenStats,
+    setConnected,
     setShowInfo,
-    setChatToDelete,
-    setDeleteDialogOpen,
     setChatHistory,
+    setChatList,
+    setCurrentChatId,
+    setDeleteDialogOpen,
+    setChatToDelete,
+    setSummarizing,
+    setCreatingChat,
     setStreamingContent,
     setPendingUserMessage,
     handleThemeChange,
@@ -203,6 +197,17 @@ function renderMainAppUI(props: any) {
     themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
 
   const theme = createTokyoNightTheme(actualThemeMode);
+
+  const navigate = useNavigate();
+  const params = useParams();
+  const chatIdFromUrl = params.id || null;
+
+  // Load chat content when URL param changes
+  useEffect(() => {
+    if (chatIdFromUrl && chatIdFromUrl !== currentChatId) {
+      handleSwitchChat(chatIdFromUrl);
+    }
+  }, [chatIdFromUrl]);
 
   const getThemeIcon = () => {
     switch (themeMode) {
@@ -379,7 +384,10 @@ function renderMainAppUI(props: any) {
                   <ListItemButton
                     key={chat.id}
                     selected={chat.id === currentChatId}
-                    onClick={() => handleSwitchChat(chat.id)}
+                    onClick={() => {
+                      // Use navigate to update browser history and URL
+                      navigate(`/chat/${chat.id}`);
+                    }}
                     sx={{ display: "flex", alignItems: "flex-start" }}
                   >
                     <ChatIcon sx={{ mr: 1, mt: 0.5 }} />
@@ -521,6 +529,9 @@ const RoutedApp: React.FC = () => {
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
   const [pendingChatId, setPendingChatId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  // Use React Router's useNavigate for navigation
+  // (must be inside the component)
+  const navigate = require("react-router-dom").useNavigate();
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -665,6 +676,8 @@ const RoutedApp: React.FC = () => {
       if (webSocketService.resetChat) {
         webSocketService.resetChat();
       }
+      // Navigate to new chat to update URL and browser history
+      navigate(`/chat/${newChat.id}`);
     } catch (err) {
       setError("Failed to create new chat");
     } finally {
@@ -689,7 +702,7 @@ const RoutedApp: React.FC = () => {
       const resp = await fetch(`/api/chats/${chatId}`);
       const data = await resp.json();
       if (data.success) {
-        setCurrentChatId(chatId);
+        // Do not setCurrentChatId here; let URL be the source of truth!
         webSocketService.switchChat(chatId);
         const historyData = await apiService.getHistory(chatId);
         if (historyData && Array.isArray(historyData.history)) {
@@ -724,7 +737,7 @@ const RoutedApp: React.FC = () => {
         if (currentChatId === chatId) {
           if (chatList.length > 1) {
             const next = chatList.find((c) => c.id !== chatId);
-            if (next) handleSwitchChat(next.id);
+            if (next) navigate(`/chat/${next.id}`);
           } else {
             setChatHistory([]);
             setCurrentChatId(null);
@@ -757,7 +770,7 @@ const RoutedApp: React.FC = () => {
       <Route
         path="/chat/:id"
         element={
-          <ChatRouteWrapper
+          <MainAppUI
             themeMode={themeMode}
             systemPrefersDark={systemPrefersDark}
             config={config}
@@ -808,7 +821,7 @@ const RoutedApp: React.FC = () => {
       <Route
         path="/chat"
         element={
-          <ChatRouteWrapper
+          <MainAppUI
             themeMode={themeMode}
             systemPrefersDark={systemPrefersDark}
             config={config}
@@ -856,6 +869,7 @@ const RoutedApp: React.FC = () => {
           />
         }
       />
+
       <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
   );
