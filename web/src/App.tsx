@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useNavigate,
+  useParams,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
+import {
   ThemeProvider,
   CssBaseline,
   Box,
@@ -36,294 +45,164 @@ import ChatIcon from "@mui/icons-material/Chat";
 
 type ThemeMode = "light" | "dark" | "system";
 
-const App: React.FC = () => {
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
-  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
-  const [config, setConfig] = useState<ChatConfig | null>(null);
-  const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showInfo, setShowInfo] = useState(false);
-  const [chatHistory, setChatHistory] = useState<
-    { id: string; content: string; isUser: boolean; timestamp: Date; modelName?: string }[]
-  >([]);
-  const [chatList, setChatList] = useState<
-    { id: string; title: string; created_at: string; last_updated: string }[]
-  >([]);
-  // Removed sidebarOpen state, no longer needed with permanent sidebar
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+/**
+ * ChatRouteWrapper is a wrapper to sync chatId in URL with App state.
+ */
+const ChatRouteWrapper: React.FC<{
+  themeMode: ThemeMode;
+  systemPrefersDark: boolean;
+  setThemeMode: React.Dispatch<React.SetStateAction<ThemeMode>>;
+  setSystemPrefersDark: React.Dispatch<React.SetStateAction<boolean>>;
+  config: ChatConfig | null;
+  tokenStats: TokenStats | null;
+  connected: boolean;
+  error: string | null;
+  showInfo: boolean;
+  chatHistory: {
+    id: string;
+    content: string;
+    isUser: boolean;
+    timestamp: Date;
+    modelName?: string;
+  }[];
+  chatList: { id: string; title: string; created_at: string; last_updated: string }[];
+  currentChatId: string | null;
+  deleteDialogOpen: boolean;
+  chatToDelete: string | null;
+  summarizing: boolean;
+  creatingChat: boolean;
+  streamingContent: string;
+  pendingUserMessage: string | null;
+  pendingChatId: string | null;
+  isProcessing: boolean;
+  setConfig: React.Dispatch<React.SetStateAction<ChatConfig | null>>;
+  setTokenStats: React.Dispatch<React.SetStateAction<TokenStats | null>>;
+  setConnected: React.Dispatch<React.SetStateAction<boolean>>;
+  setError: React.Dispatch<React.SetStateAction<string | null>>;
+  setShowInfo: React.Dispatch<React.SetStateAction<boolean>>;
+  setChatHistory: React.Dispatch<
+    React.SetStateAction<
+      { id: string; content: string; isUser: boolean; timestamp: Date; modelName?: string }[]
+    >
+  >;
+  setChatList: React.Dispatch<
+    React.SetStateAction<{ id: string; title: string; created_at: string; last_updated: string }[]>
+  >;
+  setCurrentChatId: React.Dispatch<React.SetStateAction<string | null>>;
+  setDeleteDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setChatToDelete: React.Dispatch<React.SetStateAction<string | null>>;
+  setSummarizing: React.Dispatch<React.SetStateAction<boolean>>;
+  setCreatingChat: React.Dispatch<React.SetStateAction<boolean>>;
+  setStreamingContent: React.Dispatch<React.SetStateAction<string>>;
+  setPendingUserMessage: React.Dispatch<React.SetStateAction<string | null>>;
+  setPendingChatId: React.Dispatch<React.SetStateAction<string | null>>;
+  setIsProcessing: React.Dispatch<React.SetStateAction<boolean>>;
+  handleThemeChange: () => void;
+  handleClearChat: () => Promise<void>;
+  handleSummarizeChat: () => Promise<void>;
+  handleNewChat: () => Promise<void>;
+  refreshChatList: () => Promise<void>;
+  handleSwitchChat: (chatId: string) => Promise<void>;
+  handleDeleteChat: (chatId: string) => Promise<void>;
+  infoText: string;
+}> = (props) => {
+  const navigate = useNavigate();
+  const params = useParams();
+  const chatIdFromUrl = params.id || null;
 
-  // Loading states for new features
-  const [summarizing, setSummarizing] = useState(false);
-  const [creatingChat, setCreatingChat] = useState(false);
+  // Sync state to URL param (URL is source of truth)
+  useEffect(() => {
+    if (chatIdFromUrl && chatIdFromUrl !== props.currentChatId) {
+      props.handleSwitchChat(chatIdFromUrl);
+    }
+    // If no chatId in URL but there are chats, navigate to first chat
+    if (!chatIdFromUrl && props.chatList.length > 0) {
+      navigate(`/chat/${props.chatList[0].id}`, { replace: true });
+    }
+    // If no chats at all, stay on /chat
+  }, [chatIdFromUrl, props.currentChatId, props.chatList]);
 
-  // Streaming LLM reply state
-  const [streamingContent, setStreamingContent] = useState("");
-  // Track if a message is being sent (for optimistic UI)
-  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
-  // Track pending chat creation (for new chats)
-  const [pendingChatId, setPendingChatId] = useState<string | null>(null);
-  // Track if waiting for LLM response
-  const [isProcessing, setIsProcessing] = useState(false);
+  // When a new chat is created, navigate to its URL
+  useEffect(() => {
+    if (props.currentChatId && chatIdFromUrl !== props.currentChatId) {
+      navigate(`/chat/${props.currentChatId}`, { replace: true });
+    }
+  }, [props.currentChatId]);
 
-  // Determine actual theme mode
+  // If no chatId in URL and no chats, show empty state
+  if (!chatIdFromUrl && props.chatList.length === 0) {
+    return (
+      <Box p={3}>
+        <Typography variant="h5">No chats yet. Start a new chat!</Typography>
+      </Box>
+    );
+  }
+
+  // If chatId in URL but not in chatList, show not found
+  if (chatIdFromUrl && !props.chatList.some((c) => c.id === chatIdFromUrl)) {
+    return (
+      <Box p={3}>
+        <Typography variant="h5">Chat not found.</Typography>
+      </Box>
+    );
+  }
+
+  // Render main UI (sidebar, chat, etc) as before
+  // (Insert the main App UI here, replacing all references to currentChatId with chatIdFromUrl)
+  // We'll move the main App JSX into a function for clarity below.
+  return renderMainAppUI({
+    ...props,
+    currentChatId: chatIdFromUrl,
+  });
+};
+
+/* (removed old App function, see below for new RoutedApp) */
+
+/**
+ * Renders the main App UI, extracted for router integration.
+ * All props are passed through, and currentChatId is from URL.
+ */
+function renderMainAppUI(props: any) {
+  const {
+    themeMode,
+    systemPrefersDark,
+    config,
+    tokenStats,
+    connected,
+    error,
+    showInfo,
+    chatHistory,
+    chatList,
+    currentChatId,
+    deleteDialogOpen,
+    chatToDelete,
+    summarizing,
+    creatingChat,
+    streamingContent,
+    pendingUserMessage,
+    isProcessing,
+    setThemeMode,
+    setShowInfo,
+    setChatToDelete,
+    setDeleteDialogOpen,
+    setChatHistory,
+    setStreamingContent,
+    setPendingUserMessage,
+    handleThemeChange,
+    handleShowInfo,
+    handleNewChat,
+    handleSummarizeChat,
+    handleClearChat,
+    handleSwitchChat,
+    handleDeleteChat,
+    setError,
+    infoText,
+  } = props;
+
   const actualThemeMode =
     themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
 
   const theme = createTokyoNightTheme(actualThemeMode);
-
-  // System theme detection
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    setSystemPrefersDark(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, []);
-
-  // Load initial data
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        const [configData, tokensData, historyData, chatsData] = await Promise.all([
-          apiService.getConfig(),
-          apiService.getTokens(),
-          apiService.getHistory(),
-          fetch("/api/chats").then((r) => r.json()),
-        ]);
-        setConfig(configData);
-        setTokenStats(tokensData);
-        // Convert backend history to Message[] format
-        if (historyData && Array.isArray(historyData.history)) {
-          const mapped = historyData.history.map((item, idx) => ({
-            id: String(idx) + "-" + String(Date.now()),
-            content: item.content,
-            isUser: item.role === "user",
-            timestamp: new Date(),
-          }));
-          setChatHistory(mapped);
-        }
-        if (Array.isArray(chatsData)) {
-          setChatList(chatsData);
-          if (chatsData.length > 0) setCurrentChatId(chatsData[0].id);
-        }
-      } catch (err) {
-        console.error("Failed to load initial data:", err);
-        setError("Failed to load configuration");
-      }
-    };
-
-    loadInitialData();
-  }, []);
-
-  // WebSocket streaming handler for LLM replies
-  useEffect(() => {
-    webSocketService.onMessage((chunk: string) => {
-      setStreamingContent((prev) => prev + chunk);
-    });
-  }, []);
-
-  // WebSocket status handler for robust chat switching and UI update
-  useEffect(() => {
-    webSocketService.onStatus(async (status, data) => {
-      if (status === "complete") {
-        setStreamingContent(""); // Clear streaming content on message complete
-        setPendingUserMessage(null);
-        setIsProcessing(false);
-
-        // Always switch to the new chat if a newChatId is present
-        if (data && data.newChatId) {
-          setCurrentChatId(data.newChatId);
-          await refreshChatList();
-          await handleSwitchChat(data.newChatId);
-        } else if (currentChatId) {
-          await refreshChatList();
-          await handleSwitchChat(currentChatId);
-        }
-      }
-    });
-  }, [currentChatId, pendingChatId]);
-
-  // WebSocket connection management
-  useEffect(() => {
-    webSocketService.onConnectionChange(setConnected);
-    webSocketService.onError(setError);
-    webSocketService.onTokenUpdate(setTokenStats);
-
-    return () => {
-      webSocketService.disconnect();
-    };
-  }, []);
-
-  const handleThemeChange = () => {
-    const modes: ThemeMode[] = ["dark", "light", "system"];
-    const currentIndex = modes.indexOf(themeMode);
-    const nextIndex = (currentIndex + 1) % modes.length;
-    setThemeMode(modes[nextIndex]);
-  };
-
-  const handleClearChat = async () => {
-    try {
-      await apiService.clearChat();
-      const tokensData = await apiService.getTokens();
-      setTokenStats(tokensData);
-      setChatHistory([]);
-    } catch (err) {
-      console.error("Failed to clear chat:", err);
-      setError("Failed to clear chat");
-    }
-  };
-
-  // Summarize & Compact current chat
-  const handleSummarizeChat = async () => {
-    if (!currentChatId) return;
-    setSummarizing(true);
-    try {
-      const resp = await apiService.summarizeChat(currentChatId);
-      if (resp.success && Array.isArray(resp.history)) {
-        const mapped = resp.history.map((item, idx) => ({
-          id: String(idx) + "-" + String(Date.now()),
-          content: item.content,
-          isUser: item.role === "user",
-          timestamp: new Date(),
-        }));
-        setChatHistory(mapped);
-        setError(null);
-      } else {
-        setError("Failed to summarize chat");
-      }
-    } catch (err) {
-      console.error("Summarize chat error:", err);
-      setError("Failed to summarize chat");
-    } finally {
-      setSummarizing(false);
-    }
-  };
-
-  // New Chat: Create chat in backend, add to history, and select it immediately
-  const handleNewChat = async () => {
-    setCreatingChat(true);
-    try {
-      // Create a new chat in the backend
-      const newChat = await apiService.createChat();
-      setCurrentChatId(newChat.id);
-      setChatHistory([]);
-      setStreamingContent("");
-      setPendingUserMessage(null);
-      setError(null);
-      setTokenStats({ total: 0, user: 0, assistant: 0, messages: 0 });
-      await refreshChatList();
-      // Sync backend WebSocket session to new chat
-      if (webSocketService.switchChat) {
-        webSocketService.switchChat(newChat.id);
-      }
-      // If using WebSocket session state, reset it:
-      if (webSocketService.resetChat) {
-        webSocketService.resetChat();
-      }
-    } catch (err) {
-      setError("Failed to create new chat");
-    } finally {
-      setCreatingChat(false);
-    }
-  };
-
-  // Load chat list
-  const refreshChatList = async () => {
-    try {
-      console.log("Refreshing chat list...");
-      const chatsData = await fetch("/api/chats").then((r) => r.json());
-      console.log("Chat list received:", chatsData);
-      if (Array.isArray(chatsData)) {
-        setChatList(chatsData);
-        console.log("Chat list updated with", chatsData.length, "chats");
-      }
-    } catch (err) {
-      console.error("Failed to load chat list:", err);
-      setError("Failed to load chat list");
-    }
-  };
-
-  // Switch chat
-  const handleSwitchChat = async (chatId: string) => {
-    try {
-      console.log("Switching to chat:", chatId);
-
-      // Clear current chat history first
-      setChatHistory([]);
-
-      const resp = await fetch(`/api/chats/${chatId}`);
-      const data = await resp.json();
-      if (data.success) {
-        // Set current chat ID first
-        setCurrentChatId(chatId);
-
-        // Notify websocket to switch chat context
-        webSocketService.switchChat(chatId);
-
-        // Load chat history
-        const historyData = await apiService.getHistory(chatId);
-        console.log("Loaded history for chat:", chatId, historyData);
-
-        if (historyData && Array.isArray(historyData.history)) {
-          const mapped = historyData.history.map((item, idx) => ({
-            id: String(idx) + "-" + String(Date.now()),
-            content: item.content,
-            isUser: item.role === "user",
-            timestamp: new Date(),
-          }));
-          console.log("Setting chat history:", mapped);
-          setChatHistory(mapped);
-        } else {
-          console.log("No history found for chat:", chatId);
-          setChatHistory([]);
-        }
-
-        // Update token stats for the selected chat
-        const tokensData = await apiService.getTokens(chatId);
-        setTokenStats(tokensData);
-      } else {
-        setError("Failed to load chat");
-      }
-    } catch (err) {
-      console.error("Failed to switch chat:", err);
-      setError("Failed to switch chat");
-    }
-  };
-
-  // Delete chat
-  const handleDeleteChat = async (chatId: string) => {
-    try {
-      const resp = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
-      const data = await resp.json();
-      if (data.success) {
-        setDeleteDialogOpen(false);
-        setChatToDelete(null);
-        await refreshChatList();
-        // If deleted chat was current, switch to another
-        if (currentChatId === chatId) {
-          if (chatList.length > 1) {
-            const next = chatList.find((c) => c.id !== chatId);
-            if (next) handleSwitchChat(next.id);
-          } else {
-            setChatHistory([]);
-            setCurrentChatId(null);
-          }
-        }
-      } else {
-        setError("Failed to delete chat");
-      }
-    } catch (err) {
-      setError("Failed to delete chat");
-    }
-  };
-
-  const handleShowInfo = () => {
-    setShowInfo(true);
-  };
 
   const getThemeIcon = () => {
     switch (themeMode) {
@@ -344,20 +223,6 @@ const App: React.FC = () => {
   };
 
   const connectionStatus = getConnectionStatus();
-
-  const infoText = config
-    ? [
-        `Model: ${config.model}`,
-        `LLM: ${config.llm}`,
-        `Collection: ${config.collection}`,
-        `Embedding: ${config.embedding_llm}/${config.embedding_model}`,
-        tokenStats ? `Messages: ${tokenStats.messages}` : "",
-        tokenStats ? `Total Tokens: ${tokenStats.total}` : "",
-        tokenStats ? `User: ${tokenStats.user} | Assistant: ${tokenStats.assistant}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : "";
 
   return (
     <ThemeProvider theme={theme}>
@@ -427,7 +292,7 @@ const App: React.FC = () => {
             {/* Action Buttons */}
 
             <Button
-              startIcon={<ChatIcon />} // You may want to use <AddIcon /> if available
+              startIcon={<ChatIcon />}
               onClick={handleNewChat}
               disabled={creatingChat}
               sx={{ ml: 2 }}
@@ -510,7 +375,7 @@ const App: React.FC = () => {
                     <ListItemText primary="No chats yet." />
                   </ListItemButton>
                 )}
-                {chatList.map((chat) => (
+                {chatList.map((chat: any) => (
                   <ListItemButton
                     key={chat.id}
                     selected={chat.id === currentChatId}
@@ -557,12 +422,12 @@ const App: React.FC = () => {
                 pendingUserMessage={pendingUserMessage}
                 onSendMessage={(message: string) => {
                   setStreamingContent(""); // Clear before sending new message
-                  setIsProcessing(true);
+                  props.setIsProcessing(true);
                   setPendingUserMessage(null);
 
                   // Only optimistically add user message if this is an existing chat
                   if (currentChatId) {
-                    setChatHistory((prev) => [
+                    setChatHistory((prev: any) => [
                       ...prev,
                       {
                         id: String(Date.now()),
@@ -630,6 +495,370 @@ const App: React.FC = () => {
       </Box>
     </ThemeProvider>
   );
+}
+
+// All state, effects, and handlers are now here in RoutedApp:
+const RoutedApp: React.FC = () => {
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+  const [config, setConfig] = useState<ChatConfig | null>(null);
+  const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [chatHistory, setChatHistory] = useState<
+    { id: string; content: string; isUser: boolean; timestamp: Date; modelName?: string }[]
+  >([]);
+  const [chatList, setChatList] = useState<
+    { id: string; title: string; created_at: string; last_updated: string }[]
+  >([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const [creatingChat, setCreatingChat] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const [pendingChatId, setPendingChatId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    setSystemPrefersDark(mediaQuery.matches);
+
+    const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, []);
+
+  // Ensure WebSocket connects only once per app load
+  useEffect(() => {
+    webSocketService.init();
+  }, []);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const [configData, tokensData, historyData, chatsData] = await Promise.all([
+          apiService.getConfig(),
+          apiService.getTokens(),
+          apiService.getHistory(),
+          fetch("/api/chats").then((r) => r.json()),
+        ]);
+        setConfig(configData);
+        setTokenStats(tokensData);
+        if (historyData && Array.isArray(historyData.history)) {
+          const mapped = historyData.history.map((item, idx) => ({
+            id: String(idx) + "-" + String(Date.now()),
+            content: item.content,
+            isUser: item.role === "user",
+            timestamp: new Date(),
+          }));
+          setChatHistory(mapped);
+        }
+        if (Array.isArray(chatsData)) {
+          setChatList(chatsData);
+          // Do not set currentChatId here; let the URL control it!
+        }
+      } catch (err) {
+        console.error("Failed to load initial data:", err);
+        setError("Failed to load configuration");
+      }
+    };
+
+    loadInitialData();
+  }, []);
+
+  useEffect(() => {
+    webSocketService.onMessage((chunk: string) => {
+      setStreamingContent((prev) => prev + chunk);
+    });
+  }, []);
+
+  useEffect(() => {
+    webSocketService.onStatus(async (status, data) => {
+      if (status === "complete") {
+        setStreamingContent("");
+        setPendingUserMessage(null);
+        setIsProcessing(false);
+
+        if (data && data.newChatId) {
+          setCurrentChatId(data.newChatId);
+          await refreshChatList();
+          await handleSwitchChat(data.newChatId);
+        } else if (currentChatId) {
+          await refreshChatList();
+          await handleSwitchChat(currentChatId);
+        }
+      }
+    });
+  }, [currentChatId, pendingChatId]);
+
+  useEffect(() => {
+    webSocketService.onConnectionChange(setConnected);
+    webSocketService.onError(setError);
+    webSocketService.onTokenUpdate(setTokenStats);
+
+    return () => {
+      webSocketService.disconnect();
+    };
+  }, []);
+
+  const handleThemeChange = () => {
+    const modes: ThemeMode[] = ["dark", "light", "system"];
+    const currentIndex = modes.indexOf(themeMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setThemeMode(modes[nextIndex]);
+  };
+
+  const handleClearChat = async () => {
+    try {
+      await apiService.clearChat();
+      const tokensData = await apiService.getTokens();
+      setTokenStats(tokensData);
+      setChatHistory([]);
+    } catch (err) {
+      console.error("Failed to clear chat:", err);
+      setError("Failed to clear chat");
+    }
+  };
+
+  const handleSummarizeChat = async () => {
+    if (!currentChatId) return;
+    setSummarizing(true);
+    try {
+      const resp = await apiService.summarizeChat(currentChatId);
+      if (resp.success && Array.isArray(resp.history)) {
+        const mapped = resp.history.map((item, idx) => ({
+          id: String(idx) + "-" + String(Date.now()),
+          content: item.content,
+          isUser: item.role === "user",
+          timestamp: new Date(),
+        }));
+        setChatHistory(mapped);
+        setError(null);
+      } else {
+        setError("Failed to summarize chat");
+      }
+    } catch (err) {
+      console.error("Summarize chat error:", err);
+      setError("Failed to summarize chat");
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
+  const handleNewChat = async () => {
+    setCreatingChat(true);
+    try {
+      const newChat = await apiService.createChat();
+      setCurrentChatId(newChat.id);
+      setChatHistory([]);
+      setStreamingContent("");
+      setPendingUserMessage(null);
+      setError(null);
+      setTokenStats({ total: 0, user: 0, assistant: 0, messages: 0 });
+      await refreshChatList();
+      if (webSocketService.switchChat) {
+        webSocketService.switchChat(newChat.id);
+      }
+      if (webSocketService.resetChat) {
+        webSocketService.resetChat();
+      }
+    } catch (err) {
+      setError("Failed to create new chat");
+    } finally {
+      setCreatingChat(false);
+    }
+  };
+
+  const refreshChatList = async () => {
+    try {
+      const chatsData = await fetch("/api/chats").then((r) => r.json());
+      if (Array.isArray(chatsData)) {
+        setChatList(chatsData);
+      }
+    } catch (err) {
+      setError("Failed to load chat list");
+    }
+  };
+
+  const handleSwitchChat = async (chatId: string) => {
+    try {
+      setChatHistory([]);
+      const resp = await fetch(`/api/chats/${chatId}`);
+      const data = await resp.json();
+      if (data.success) {
+        setCurrentChatId(chatId);
+        webSocketService.switchChat(chatId);
+        const historyData = await apiService.getHistory(chatId);
+        if (historyData && Array.isArray(historyData.history)) {
+          const mapped = historyData.history.map((item, idx) => ({
+            id: String(idx) + "-" + String(Date.now()),
+            content: item.content,
+            isUser: item.role === "user",
+            timestamp: new Date(),
+          }));
+          setChatHistory(mapped);
+        } else {
+          setChatHistory([]);
+        }
+        const tokensData = await apiService.getTokens(chatId);
+        setTokenStats(tokensData);
+      } else {
+        setError("Failed to load chat");
+      }
+    } catch (err) {
+      setError("Failed to switch chat");
+    }
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      const resp = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
+      const data = await resp.json();
+      if (data.success) {
+        setDeleteDialogOpen(false);
+        setChatToDelete(null);
+        await refreshChatList();
+        if (currentChatId === chatId) {
+          if (chatList.length > 1) {
+            const next = chatList.find((c) => c.id !== chatId);
+            if (next) handleSwitchChat(next.id);
+          } else {
+            setChatHistory([]);
+            setCurrentChatId(null);
+          }
+        }
+      } else {
+        setError("Failed to delete chat");
+      }
+    } catch (err) {
+      setError("Failed to delete chat");
+    }
+  };
+
+  const infoText = config
+    ? [
+        `Model: ${config.model}`,
+        `LLM: ${config.llm}`,
+        `Collection: ${config.collection}`,
+        `Embedding: ${config.embedding_llm}/${config.embedding_model}`,
+        tokenStats ? `Messages: ${tokenStats.messages}` : "",
+        tokenStats ? `Total Tokens: ${tokenStats.total}` : "",
+        tokenStats ? `User: ${tokenStats.user} | Assistant: ${tokenStats.assistant}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
+  return (
+    <Routes>
+      <Route
+        path="/chat/:id"
+        element={
+          <ChatRouteWrapper
+            themeMode={themeMode}
+            systemPrefersDark={systemPrefersDark}
+            config={config}
+            tokenStats={tokenStats}
+            connected={connected}
+            error={error}
+            showInfo={showInfo}
+            chatHistory={chatHistory}
+            chatList={chatList}
+            currentChatId={currentChatId}
+            deleteDialogOpen={deleteDialogOpen}
+            chatToDelete={chatToDelete}
+            summarizing={summarizing}
+            creatingChat={creatingChat}
+            streamingContent={streamingContent}
+            pendingUserMessage={pendingUserMessage}
+            pendingChatId={pendingChatId}
+            isProcessing={isProcessing}
+            setThemeMode={setThemeMode}
+            setSystemPrefersDark={setSystemPrefersDark}
+            setConfig={setConfig}
+            setTokenStats={setTokenStats}
+            setConnected={setConnected}
+            setError={setError}
+            setShowInfo={setShowInfo}
+            setChatHistory={setChatHistory}
+            setChatList={setChatList}
+            setCurrentChatId={setCurrentChatId}
+            setDeleteDialogOpen={setDeleteDialogOpen}
+            setChatToDelete={setChatToDelete}
+            setSummarizing={setSummarizing}
+            setCreatingChat={setCreatingChat}
+            setStreamingContent={setStreamingContent}
+            setPendingUserMessage={setPendingUserMessage}
+            setPendingChatId={setPendingChatId}
+            setIsProcessing={setIsProcessing}
+            handleThemeChange={handleThemeChange}
+            handleClearChat={handleClearChat}
+            handleSummarizeChat={handleSummarizeChat}
+            handleNewChat={handleNewChat}
+            refreshChatList={refreshChatList}
+            handleSwitchChat={handleSwitchChat}
+            handleDeleteChat={handleDeleteChat}
+            infoText={infoText}
+          />
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <ChatRouteWrapper
+            themeMode={themeMode}
+            systemPrefersDark={systemPrefersDark}
+            config={config}
+            tokenStats={tokenStats}
+            connected={connected}
+            error={error}
+            showInfo={showInfo}
+            chatHistory={chatHistory}
+            chatList={chatList}
+            currentChatId={currentChatId}
+            deleteDialogOpen={deleteDialogOpen}
+            chatToDelete={chatToDelete}
+            summarizing={summarizing}
+            creatingChat={creatingChat}
+            streamingContent={streamingContent}
+            pendingUserMessage={pendingUserMessage}
+            pendingChatId={pendingChatId}
+            isProcessing={isProcessing}
+            setThemeMode={setThemeMode}
+            setSystemPrefersDark={setSystemPrefersDark}
+            setConfig={setConfig}
+            setTokenStats={setTokenStats}
+            setConnected={setConnected}
+            setError={setError}
+            setShowInfo={setShowInfo}
+            setChatHistory={setChatHistory}
+            setChatList={setChatList}
+            setCurrentChatId={setCurrentChatId}
+            setDeleteDialogOpen={setDeleteDialogOpen}
+            setChatToDelete={setChatToDelete}
+            setSummarizing={setSummarizing}
+            setCreatingChat={setCreatingChat}
+            setStreamingContent={setStreamingContent}
+            setPendingUserMessage={setPendingUserMessage}
+            setPendingChatId={setPendingChatId}
+            setIsProcessing={setIsProcessing}
+            handleThemeChange={handleThemeChange}
+            handleClearChat={handleClearChat}
+            handleSummarizeChat={handleSummarizeChat}
+            handleNewChat={handleNewChat}
+            refreshChatList={refreshChatList}
+            handleSwitchChat={handleSwitchChat}
+            handleDeleteChat={handleDeleteChat}
+            infoText={infoText}
+          />
+        }
+      />
+      <Route path="*" element={<Navigate to="/chat" replace />} />
+    </Routes>
+  );
 };
 
-export default App;
+export default RoutedApp;

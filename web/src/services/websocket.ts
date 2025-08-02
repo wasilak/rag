@@ -31,6 +31,7 @@ export type ErrorHandler = (error: string) => void;
 class WebSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private connecting = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -42,14 +43,17 @@ class WebSocketService {
   private errorHandler: ErrorHandler | null = null;
   private connectionHandler: ((connected: boolean) => void) | null = null;
 
-  constructor() {
+  // Do not auto-connect in constructor; use explicit init()
+  constructor() {}
+
+  public init() {
+    if (this.socket && this.isConnected) return; // Already connected
+    if (this.connecting) return; // Already trying to connect
+    this.connecting = true;
     this.connect();
   }
 
   private connect() {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = process.env.NODE_ENV === "development" ? "localhost:8080" : window.location.host;
-
     const socketUrl =
       process.env.NODE_ENV === "development"
         ? "http://localhost:8080"
@@ -58,7 +62,11 @@ class WebSocketService {
     this.socket = io(socketUrl, {
       transports: ["websocket", "polling"],
       timeout: 20000,
-      forceNew: true,
+      // forceNew: true, // Removed for robust singleton
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
 
     this.setupEventHandlers();
@@ -68,38 +76,32 @@ class WebSocketService {
     if (!this.socket) return;
 
     this.socket.on("connect", () => {
-      console.log("Connected to WebSocket");
       this.isConnected = true;
+      this.connecting = false;
       this.reconnectAttempts = 0;
       this.connectionHandler?.(true);
+      console.log("Connected to WebSocket");
     });
 
     this.socket.on("disconnect", (reason) => {
-      console.log("Disconnected from WebSocket:", reason);
       this.isConnected = false;
       this.connectionHandler?.(false);
-
-      // Auto-reconnect on unexpected disconnection
-      if (reason === "io server disconnect") {
-        // Server initiated disconnect, don't reconnect
-        return;
-      }
-
-      this.handleReconnect();
+      this.connecting = false;
+      console.log("Disconnected from WebSocket:", reason);
     });
 
     this.socket.on("connect_error", (error) => {
-      console.error("Connection error:", error);
       this.isConnected = false;
       this.connectionHandler?.(false);
-      this.handleReconnect();
+      this.connecting = false;
+      console.error("Connection error:", error);
     });
 
     this.socket.on("message_chunk", (data: { chunk: string }) => {
       this.messageHandler?.(data.chunk);
     });
 
-    this.socket.on("message_status", (data: { status: string;[key: string]: any }) => {
+    this.socket.on("message_status", (data: { status: string; [key: string]: any }) => {
       console.log("WebSocket message_status received:", data);
       this.statusHandler?.(data.status as "processing" | "complete" | "error", data);
     });

@@ -23,6 +23,7 @@
     "react": "~19",
     "react-dom": "~19",
     "react-markdown": "~10",
+    "react-router-dom": "^7.7.1",
     "react-scripts": "~5",
     "remark-gfm": "~4",
     "socket.io-client": "~4",
