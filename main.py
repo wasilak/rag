@@ -16,6 +16,10 @@ logger = logging.getLogger("RAG")
 
 def main():
     args = parse_arguments()
+    # Determine if Chroma should be used for data-fill
+    insert_into_chroma = True
+    if getattr(args, "subparser", None) == "data-fill":
+        insert_into_chroma = getattr(args, "insert_into_chroma", True)
 
     # Set up colored logging
     handler = colorlog.StreamHandler()
@@ -61,34 +65,37 @@ def main():
     llm_provider = getattr(args, 'llm', 'ollama')  # Default to ollama if not specified
     embedding_llm_provider = getattr(args, 'embedding_llm', 'ollama')  # Default to ollama if not specified
 
-    # Set up caching requirements
-    cache_requirements = CacheRequirements(
-        llm_provider=llm_provider,
-        embedding_llm_provider=embedding_llm_provider,
-        subcommand=args.subparser
-    )
-
-    # Pre-cache models
-    pre_cache_llm_models(
-        requirements=cache_requirements,
-        process_list_models=process_list_models,
-        ollama_host=args.ollama_host,
-        ollama_port=args.ollama_port,
-        embedding_ollama_host=args.embedding_ollama_host,
-        embedding_ollama_port=args.embedding_ollama_port
-    )
-
+    # Only pre-cache models and set up ChromaDB client if not skipping Chroma for data-fill
     chroma_settings = Settings(anonymized_telemetry=False)
+    client = None
 
-    if len(args.chromadb_path) > 0:
-        client = chromadb.PersistentClient(
-            path=args.chromadb_path, settings=chroma_settings
+    if args.subparser != "data-fill" or insert_into_chroma:
+        # Set up caching requirements
+        cache_requirements = CacheRequirements(
+            llm_provider=llm_provider,
+            embedding_llm_provider=embedding_llm_provider,
+            subcommand=args.subparser
         )
-    else:
-        # https://docs.trychroma.com/reference/python/client
-        client = chromadb.HttpClient(
-            host=args.chromadb_host, port=args.chromadb_port, settings=chroma_settings
+
+        # Pre-cache models
+        pre_cache_llm_models(
+            requirements=cache_requirements,
+            process_list_models=process_list_models,
+            ollama_host=args.ollama_host,
+            ollama_port=args.ollama_port,
+            embedding_ollama_host=args.embedding_ollama_host,
+            embedding_ollama_port=args.embedding_ollama_port
         )
+
+        if len(args.chromadb_path) > 0:
+            client = chromadb.PersistentClient(
+                path=args.chromadb_path, settings=chroma_settings
+            )
+        else:
+            # https://docs.trychroma.com/reference/python/client
+            client = chromadb.HttpClient(
+                host=args.chromadb_host, port=args.chromadb_port, settings=chroma_settings
+            )
 
     if args.subparser == "data-fill":
 
@@ -109,9 +116,18 @@ def main():
             fabric_command=args.fabric_command,
             chunk_size=args.chunk_size,
             chunk_overlap=args.chunk_overlap,
+            insert_into_chroma=insert_into_chroma,
+            upload_to_s3=getattr(args, "upload_to_s3", False),
+            upload_to_open_webui=getattr(args, "upload_to_open_webui", False),
+            open_webui_url=getattr(args, "open_webui_url", "http://localhost:3000"),
+            open_webui_api_key=getattr(args, "open_webui_api_key", ""),
+            open_webui_knowledge_id=getattr(args, "open_webui_knowledge_id", ""),
         )
 
     elif args.subparser == "search":
+        if client is None:
+            logger.error("ChromaDB client is not initialized. Cannot perform search.")
+            return
         process_search(
             client=client,
             collection=args.collection,
@@ -128,6 +144,9 @@ def main():
         )
 
     elif args.subparser == "chat":
+        if client is None:
+            logger.error("ChromaDB client is not initialized. Cannot start chat.")
+            return
         process_chat(
             client=client,
             collection=args.collection,
@@ -143,6 +162,9 @@ def main():
         )
 
     elif args.subparser == "web":
+        if client is None:
+            logger.error("ChromaDB client is not initialized. Cannot start web interface.")
+            return
         process_web(
             client=client,
             collection_name=args.collection,

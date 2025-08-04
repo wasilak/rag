@@ -28,6 +28,7 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_MODE: Processing mode for data-fill (default: "single")
     - RAG_BUCKET_NAME: S3 bucket name for uploading markdown files (optional)
     - RAG_BUCKET_PATH: S3 bucket path for uploading markdown files (optional)
+    - RAG_UPLOAD_TO_S3: Upload parsed markdown to S3 (default: "false")
     - RAG_ENABLE_CLEANING: Enable document cleaning (default: "false")
     - RAG_EXTRACT_WISDOM: Enable Fabric wisdom extraction (default: "false")
     - RAG_FABRIC_COMMAND: Fabric command name (default: "fabric")
@@ -157,6 +158,13 @@ def parse_arguments() -> argparse.Namespace:
         help="Mode for processing the data: 'single' for single file, 'elements' for multiple elements in a file (env: RAG_MODE)",
     )
     data_subparser.add_argument(
+        "--no-insert-into-chroma",
+        dest="insert_into_chroma",
+        action="store_false",
+        default=(get_env_default("RAG_INSERT_INTO_CHROMA", "true") or "true").lower() == "true",
+        help="Do not insert data into ChromaDB (env: RAG_INSERT_INTO_CHROMA, default: true)",
+    )
+    data_subparser.add_argument(
         "--cleanup",
         action="store_true",
         default=(get_env_default("RAG_CLEANUP", "false") or "false").lower() == "true",
@@ -173,6 +181,36 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default=get_env_default("RAG_BUCKET_PATH", ""),
         help="S3 bucket path for uploading markdown files (optional)",
+    )
+    data_subparser.add_argument(
+        "--upload-to-s3",
+        action="store_true",
+        default=(get_env_default("RAG_UPLOAD_TO_S3", "false") or "false").lower() == "true",
+        help="Upload parsed markdown to S3 (env: RAG_UPLOAD_TO_S3, default: false)",
+    )
+    data_subparser.add_argument(
+        "--upload-to-open-webui",
+        action="store_true",
+        default=(get_env_default("RAG_UPLOAD_TO_OPEN_WEBUI", "false") or "false").lower() == "true",
+        help="Upload parsed markdown to Open WebUI via API (env: RAG_UPLOAD_TO_OPEN_WEBUI, default: false)",
+    )
+    data_subparser.add_argument(
+        "--open-webui-url",
+        type=str,
+        default=get_env_default("RAG_OPEN_WEBUI_URL", "http://localhost:3000"),
+        help="Open WebUI API base URL (env: RAG_OPEN_WEBUI_URL)",
+    )
+    data_subparser.add_argument(
+        "--open-webui-api-key",
+        type=str,
+        default=get_env_default("RAG_OPEN_WEBUI_API_KEY", ""),
+        help="Open WebUI API key (env: RAG_OPEN_WEBUI_API_KEY)",
+    )
+    data_subparser.add_argument(
+        "--open-webui-knowledge-id",
+        type=str,
+        default=get_env_default("RAG_OPEN_WEBUI_KNOWLEDGE_ID", ""),
+        help="Open WebUI knowledge collection ID (env: RAG_OPEN_WEBUI_KNOWLEDGE_ID, optional)",
     )
     data_subparser.add_argument(
         "--clean-content",

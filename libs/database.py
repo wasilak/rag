@@ -1,7 +1,8 @@
 import logging
 import hashlib
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
+import io
+import re
 from libs.s3 import upload_markdown_to_s3
 from .validation import validate_s3_bucket_name, validate_s3_bucket_path
 from .embedding import set_embedding_function
@@ -123,64 +124,18 @@ def bootstrap_db(
     embedding_ollama_port: int,
     mode: str,
     id_prefix: str,
-    bucket_name: str,
-    bucket_path: str,
     chunk_size: int,
     chunk_overlap: int,
 ) -> None:
-    """Bootstrap the database with documents"""
+    """Bootstrap the database with documents (Chroma only)"""
     logger.debug(
-        f"Bootstrapping collection '{collection_name}' with {
-            len(raw_documents)} documents"
+        f"Bootstrapping collection '{collection_name}' with {len(raw_documents)} documents"
     )
     logger.debug(
-        f"Using embedding model '{
-            embedding_model}' with provider '{embedding_llm}'"
+        f"Using embedding model '{embedding_model}' with provider '{embedding_llm}'"
     )
 
     # LLM cleanup removed: documents are now cleaned only via HTML/Markdown pre-processing
-
-    # Upload to S3 if enabled (after cleaning, before chunking)
-    if bucket_name:
-        if not validate_s3_bucket_name(bucket_name):
-            logger.error(f"Invalid S3 bucket name: {bucket_name}")
-            return
-        if not validate_s3_bucket_path(bucket_path):
-            logger.error(f"Invalid S3 bucket path: {bucket_path}")
-            return
-        logger.info("Uploading documents to S3")
-        for doc in raw_documents:
-            base_title = doc.metadata.get("base_title")
-            # Add bucket_path to metadata
-            doc.metadata["bucket_path"] = bucket_path
-            if doc.metadata.get("is_wisdom") or not doc.metadata.get("is_original"):
-                # Regular files (non-original) and wisdom files go to bucket_path
-                file_title = base_title
-                file_path = (
-                    file_title + ".md"
-                    if not bucket_path
-                    else f"{bucket_path}/{file_title}.md"
-                )
-                upload_path = bucket_path
-            else:
-                # Original files only go to original/ when they have a wisdom counterpart
-                file_title = f"{base_title}_original"
-                file_path = (
-                    f"original/{file_title}.md"
-                    if not bucket_path
-                    else f"{bucket_path}/original/{file_title}.md"
-                )
-                upload_path = (
-                    "original"
-                    if not bucket_path
-                    else f"{
-                        bucket_path}/original"
-                )
-            doc.metadata["file_path"] = file_path
-            upload_markdown_to_s3(
-                doc.page_content, file_title, upload_path, bucket_name
-            )
-        logger.debug("S3 upload completed")
 
     embedding_function = set_embedding_function(
         embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
@@ -188,8 +143,7 @@ def bootstrap_db(
 
     try:
         logger.debug(
-            f"Creating/getting collection {
-                collection_name} with Ollama embedding function..."
+            f"Creating/getting collection {collection_name} with Ollama embedding function..."
         )
         collection = client.get_or_create_collection(
             name=collection_name, embedding_function=embedding_function
@@ -209,20 +163,16 @@ def bootstrap_db(
 
     chunks = splitter.split_documents(raw_documents)
     logger.debug(
-        f"Split {len(raw_documents)} documents into {
-                 len(chunks)} chunks"
+        f"Split {len(raw_documents)} documents into {len(chunks)} chunks"
     )
 
     documents, metadata, ids = process_markdown_documents(chunks, mode, id_prefix)
-
     logger.debug(
-        f"Upserting {len(documents)} documents into collection '{
-            collection_name}'"
+        f"Upserting {len(documents)} documents into collection '{collection_name}'"
     )
     collection.upsert(documents=documents, metadatas=metadata, ids=ids)
     logger.debug(
-        f"Upserted {len(documents)} documents into collection '{
-            collection_name}'"
+        f"Upserted {len(documents)} documents into collection '{collection_name}'"
     )
 
 
@@ -244,8 +194,12 @@ def log_data_fill_options(cleanup: bool, clean_content: bool, enable_wisdom: boo
         )
 
 
+from libs.openwebui import OpenWebUIUploader
+
+from typing import Optional
+
 def process_data_fill(
-    client: ClientAPI,
+    client: Optional[ClientAPI],
     collection_name: str,
     source_paths: list[str],
     mode: str,
@@ -261,6 +215,12 @@ def process_data_fill(
     fabric_command: str,
     chunk_size: int,
     chunk_overlap: int,
+    insert_into_chroma: bool = True,
+    upload_to_s3: bool = False,
+    upload_to_open_webui: bool = False,
+    open_webui_url: str = "http://localhost:3000",
+    open_webui_api_key: str = "",
+    open_webui_knowledge_id: str = "",
 ) -> None:
     """Process data fill operation for multiple sources"""
     log_data_fill_options(cleanup, clean_content, enable_wisdom, fabric_command)
@@ -268,8 +228,19 @@ def process_data_fill(
         f"Filling collection '{collection_name}' with data from {source_paths}"
     )
 
-    if cleanup:
+    if cleanup and client is not None:
         delete_collection(client, collection_name)
+    elif cleanup and client is None:
+        logger.warning("Cleanup requested but Chroma client is not available (skipping collection deletion).")
+
+    # Set up OpenWebUIUploader if needed
+    openwebui_uploader = None
+    if upload_to_open_webui and open_webui_api_key:
+        openwebui_uploader = OpenWebUIUploader(
+            api_url=open_webui_url,
+            api_key=open_webui_api_key,
+            knowledge_id=open_webui_knowledge_id or None,
+        )
 
     for source_path in source_paths:
         id_prefix = hashlib.sha256(source_path.encode()).hexdigest()[:20]
@@ -279,7 +250,7 @@ def process_data_fill(
             source_path=source_path,
             mode=mode,
             clean_content=clean_content,
-            enable_wisdom=enable_wisdom,
+            enable_wisdom=True if enable_wisdom and not upload_to_open_webui else False,
             fabric_command=fabric_command,
         )
 
@@ -287,29 +258,99 @@ def process_data_fill(
             logger.warning(f"No documents found in {source_path}. Skipping...")
             continue
 
-        logger.debug(
-            f"Bootstrapping collection '{collection_name}' with {
-                len(documents)} documents"
-        )
-        bootstrap_db(
-            client,
-            collection_name,
-            documents,
-            embedding_model,
-            embedding_llm,
-            embedding_ollama_host,
-            embedding_ollama_port,
-            mode,
-            id_prefix,
-            bucket_name,
-            bucket_path,
-            chunk_size,
-            chunk_overlap,
-        )
+        if upload_to_open_webui and openwebui_uploader:
+
+            logger.info("Uploading documents to Open WebUI")
+
+            for i, doc in enumerate(documents):
+                # Try to get a meaningful title from metadata, fallback to index
+                title = (
+                    doc.metadata.get("title")
+                    or doc.metadata.get("base_title")
+                    or doc.metadata.get("resolved_title")
+                    or f"document_{i}"
+                )
+
+                file_content = doc.page_content.encode("utf-8")
+                file_obj = io.BytesIO(file_content)
+                file_obj.name = title  # requests uses this for the filename
+
+                try:
+                    file_id = openwebui_uploader.upload_and_add(file_obj, filename=title)
+                    if file_id:
+                        logger.info(f"Uploaded {title} to Open WebUI (file_id={file_id})")
+                    else:
+                        logger.warning(f"Failed to upload {title} to Open WebUI")
+                except Exception as e:
+                    logger.error(f"Failed to upload {title} to Open WebUI: {e}")
+
+        # S3 upload logic (if enabled and Chroma is skipped)
+        if upload_to_s3 and (not insert_into_chroma or client is None):
+            if not bucket_name:
+                logger.error("S3 upload requested but no bucket name provided.")
+            elif not validate_s3_bucket_name(bucket_name):
+                logger.error(f"Invalid S3 bucket name: {bucket_name}")
+            elif not validate_s3_bucket_path(bucket_path):
+                logger.error(f"Invalid S3 bucket path: {bucket_path}")
+            else:
+                logger.info("Uploading documents to S3")
+                for doc in documents:
+                    base_title = doc.metadata.get("base_title") or "untitled"
+                    # Add bucket_path to metadata
+                    doc.metadata["bucket_path"] = bucket_path
+                    if doc.metadata.get("is_wisdom") or not doc.metadata.get("is_original"):
+                        # Regular files (non-original) and wisdom files go to bucket_path
+                        file_title = base_title
+                        file_path = (
+                            file_title + ".md"
+                            if not bucket_path
+                            else f"{bucket_path}/{file_title}.md"
+                        )
+                        upload_path = bucket_path
+                    else:
+                        # Original files only go to original/ when they have a wisdom counterpart
+                        file_title = f"{base_title}_original"
+                        file_path = (
+                            f"original/{file_title}.md"
+                            if not bucket_path
+                            else f"{bucket_path}/original/{file_title}.md"
+                        )
+                        upload_path = (
+                            "original"
+                            if not bucket_path
+                            else f"{bucket_path}/original"
+                        )
+                    doc.metadata["file_path"] = file_path
+                    upload_markdown_to_s3(
+                        doc.page_content, file_title, upload_path, bucket_name
+                    )
+                logger.debug("S3 upload completed")
+
+        # Chroma logic
+        if insert_into_chroma and client is not None:
+            logger.debug(
+                f"Bootstrapping collection '{collection_name}' with {len(documents)} documents"
+            )
+            bootstrap_db(
+                client,
+                collection_name,
+                documents,
+                embedding_model,
+                embedding_llm,
+                embedding_ollama_host,
+                embedding_ollama_port,
+                mode,
+                id_prefix,
+                chunk_size,
+                chunk_overlap,
+            )
+        elif insert_into_chroma and client is None:
+            logger.warning("ChromaDB insert requested but client is None (skipping ChromaDB insert).")
+        elif not upload_to_s3:
+            logger.info("Skipping ChromaDB insert and S3 upload due to flags.")
 
     logger.debug(
-        f"Collection '{
-            collection_name}' has been created and filled with data."
+        f"Collection '{collection_name}' has been created and filled with data."
     )
 
 
