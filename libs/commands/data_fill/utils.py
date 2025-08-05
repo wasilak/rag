@@ -21,7 +21,7 @@ def log_data_fill_options(args: argparse.Namespace) -> None:
         logger.info(
             "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
         )
-    if args.enable_wisdom:
+    if args.extract_wisdom:
         logger.info(
             f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights."
         )
