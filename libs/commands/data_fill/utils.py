@@ -208,11 +208,13 @@ def format_content(
         new_content += "---\n"
         for key, value in doc.metadata.items():
             if isinstance(value, str):
-                new_content += f"{key}: {value}\n"
+                new_content += f"{key}: \"{value}\"\n"
             elif isinstance(value, list):
-                new_content += f"{key}: {', '.join(value)}\n"
+                new_content += f"{key}:\n"
+                for item in value:
+                    new_content += f"  - \"{item}\"\n"
             else:
-                new_content += f"{key}: {str(value)}\n"
+                new_content += f"{key}: \"{str(value)}\"\n"
         new_content += "---\n"
 
     if len(wisdom) > 0:
