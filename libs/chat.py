@@ -9,7 +9,7 @@ from textual import work
 from textual.binding import Binding
 from openai import OpenAI
 import tiktoken
-from .embedding import set_embedding_function
+from .commands.data_fill.embedding import set_embedding_function
 from .utils import format_footnotes
 from .models import get_best_model
 from chromadb.api import ClientAPI
@@ -19,8 +19,6 @@ logger = logging.getLogger("RAG")
 
 
 class ChatMessage(Static):
-    """A widget to display a chat message"""
-
     DEFAULT_CSS = """
     ChatMessage {
         border: none;
@@ -64,10 +62,9 @@ class ChatMessage(Static):
         )
         self.update(panel)
 
+
 class ChatHistory(ScrollableContainer):
     """Scrollable container for chat messages"""
-
-
 
     def clear(self) -> None:
         """Clear all messages from the chat history"""
@@ -674,7 +671,7 @@ class ChatApp(App):
 
         Each document includes:
         - `text`: the paragraph or chunk content
-        - `resolved_title`: the section this chunk belongs to
+        - `sanitized_title`: the section this chunk belongs to
         - `page_title`: the title of the entire markdown document
         - `source`: the filename (e.g., markdown.md)
 

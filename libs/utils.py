@@ -2,18 +2,17 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.theme import Theme
-import re
 
 
 def format_footnotes(metadatas: list[dict]) -> str:
     """
     Deduplicates and formats footnotes from a list of metadata dicts.
-    Assumes each metadata contains 'resolved_title' and 'source' fields.
+    Assumes each metadata contains 'sanitized_title' and 'source' fields.
     """
     seen = set()
     numbered = []
     for meta in metadatas:
-        title = meta.get("resolved_title") or meta.get("top_title") or "Untitled"
+        title = meta.get("sanitized_title") or meta.get("top_title") or "Untitled"
         source = meta.get("source", "unknown.md").split("/")[-1]  # Extract filename
         key = (title, source)
         if key not in seen:
@@ -75,12 +74,3 @@ def print_fancy_markdown(
         console.print(
             Panel(md_render, title=title, border_style=border_style, expand=True)
         )
-
-
-def sanitize_title(title: str) -> str:
-    """
-    Sanitize a title by replacing special characters and spaces with underscores.
-    Also ensures the title is lowercase.
-    """
-    sanitized = re.sub(r"[^a-zA-Z0-9]", "_", title)
-    return sanitized.lower() if sanitized else "untitled"

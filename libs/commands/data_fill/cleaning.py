@@ -2,7 +2,7 @@ import logging
 from typing import List, Optional
 from openai import OpenAI
 from langchain_core.documents import Document
-from .models import get_best_model
+from ...models import get_best_model
 
 logger = logging.getLogger("RAG")
 
@@ -170,10 +170,7 @@ class DocumentCleaner:
                     },
                 )
 
-                reduction_percent = (
-                    (len(document.page_content) - len(cleaned_content))
-                    / len(document.page_content)
-                ) * 100
+                reduction_percent = ((len(document.page_content) - len(cleaned_content)) / len(document.page_content)) * 100
                 logger.debug(
                     f"Document cleaned and think tags removed: {len(document.page_content)} -> {len(cleaned_content)} chars ({reduction_percent:.1f}% reduction)"
                 )

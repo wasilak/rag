@@ -10,7 +10,7 @@ from openai import OpenAI
 import tiktoken
 from engineio.payload import Payload
 from chromadb.api import ClientAPI
-from .embedding import set_embedding_function
+from .commands.data_fill.embedding import set_embedding_function
 from .utils import format_footnotes
 from .models import get_best_model
 from .chat_storage import ChatStorage
@@ -147,7 +147,7 @@ class WebChatManager:
 
         Each document includes:
         - `text`: the paragraph or chunk content
-        - `resolved_title`: the section this chunk belongs to
+        - `sanitized_title`: the section this chunk belongs to
         - `page_title`: the title of the entire markdown document
         - `source`: the filename (e.g., markdown.md)
 

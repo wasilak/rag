@@ -6,7 +6,7 @@ from chromadb.utils.embedding_functions import (
     OpenAIEmbeddingFunction,
 )
 from chromadb.api.types import EmbeddingFunction
-from .models import get_best_model
+from ...models import get_best_model
 
 logger = logging.getLogger("RAG")
 

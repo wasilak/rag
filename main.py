@@ -3,7 +3,7 @@ import logging
 import colorlog
 from dotenv import load_dotenv
 from libs.args import parse_arguments
-from libs.database import process_data_fill
+from libs.commands.data_fill.data import process_data_fill
 from libs.search import process_search
 from libs.chat import process_chat
 from libs.web import process_web
@@ -101,27 +101,28 @@ def main():
 
         process_data_fill(
             client=client,
-            collection_name=args.collection,
-            source_paths=args.source_path,
-            mode=args.mode,
-            cleanup=args.cleanup,
-            embedding_model=args.embedding_model,
-            embedding_llm=args.embedding_llm,
-            embedding_ollama_host=args.embedding_ollama_host,
-            embedding_ollama_port=args.embedding_ollama_port,
-            bucket_name=args.bucket_name,
-            bucket_path=args.bucket_path,
-            clean_content=args.clean_content,
-            enable_wisdom=args.extract_wisdom,
-            fabric_command=args.fabric_command,
-            chunk_size=args.chunk_size,
-            chunk_overlap=args.chunk_overlap,
-            insert_into_chroma=insert_into_chroma,
-            upload_to_s3=getattr(args, "upload_to_s3", False),
-            upload_to_open_webui=getattr(args, "upload_to_open_webui", False),
-            open_webui_url=getattr(args, "open_webui_url", "http://localhost:3000"),
-            open_webui_api_key=getattr(args, "open_webui_api_key", ""),
-            open_webui_knowledge_id=getattr(args, "open_webui_knowledge_id", ""),
+            args=args,
+            # collection_name=args.collection,
+            # source_paths=args.source_path,
+            # mode=args.mode,
+            # cleanup=args.cleanup,
+            # embedding_model=args.embedding_model,
+            # embedding_llm=args.embedding_llm,
+            # embedding_ollama_host=args.embedding_ollama_host,
+            # embedding_ollama_port=args.embedding_ollama_port,
+            # bucket_name=args.bucket_name,
+            # bucket_path=args.bucket_path,
+            # clean_content=args.clean_content,
+            # enable_wisdom=args.extract_wisdom,
+            # fabric_command=args.fabric_command,
+            # chunk_size=args.chunk_size,
+            # chunk_overlap=args.chunk_overlap,
+            # insert_into_chroma=insert_into_chroma,
+            # upload_to_s3=getattr(args, "upload_to_s3", False),
+            # upload_to_open_webui=getattr(args, "upload_to_open_webui", False),
+            # open_webui_url=getattr(args, "open_webui_url", "http://localhost:3000"),
+            # open_webui_api_key=getattr(args, "open_webui_api_key", ""),
+            # open_webui_knowledge_id=getattr(args, "open_webui_knowledge_id", ""),
         )
 
     elif args.subparser == "search":
