@@ -1,3 +1,4 @@
+import argparse
 import logging
 from .validation import validate_url
 from langchain_core.documents import Document
@@ -11,18 +12,15 @@ logger = logging.getLogger("RAG")
 
 def load_documents(
     source_path: str,
-    mode: str,
-    clean_content: bool = False,
-    enable_wisdom: bool = False,
-    fabric_command: str = "fabric",
+    args: argparse.Namespace,
 ) -> List[Document]:
 
     # Use our validation module to check if path is a URL
     is_url = validate_url(source_path)
 
     if is_url:
-        docs = load_url_documents(source_path, clean_content)
+        docs = load_url_documents(source_path, args.clean_content)
     else:
-        docs = load_file_documents(source_path, mode)
+        docs = load_file_documents(source_path, args.mode)
 
     return docs

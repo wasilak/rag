@@ -1,5 +1,6 @@
 import os
 import logging
+import argparse
 from chromadb.api import ClientAPI
 from openai import OpenAI
 from .commands.data_fill.embedding import set_embedding_function
@@ -10,17 +11,15 @@ from .search_orchestrator import SearchOrchestrator
 logger = logging.getLogger("RAG")
 
 
-def create_llm_client(
-    llm: str, ollama_host: str, ollama_port: int
-) -> OpenAI:
+def create_llm_client(args: argparse.Namespace) -> OpenAI:
     """Create LLM client based on the provider"""
-    if llm == "ollama":
+    if args.llm == "ollama":
         logger.debug("Using Ollama as LLM")
         return OpenAI(
-            base_url=f"http://{ollama_host}:{ollama_port}/v1",
+            base_url=f"http://{args.ollama_host}:{args.ollama_port}/v1",
             api_key="ollama",  # required, but unused
         )
-    elif llm == "gemini":
+    elif args.llm == "gemini":
         logger.debug("Using Gemini as LLM")
         return OpenAI(
             api_key=os.getenv("GEMINI_API_KEY"),
@@ -35,23 +34,21 @@ def search(
     client_llm: OpenAI,
     model: str,
     client: ClientAPI,
-    collection_name: str,
-    query: str,
-    dry_run: bool,
     embedding_function,
+    args: argparse.Namespace,
 ) -> None:
     # Initialize search orchestrator
     orchestrator = SearchOrchestrator(
         client=client,
         llm_client=client_llm,
-        collection_name=collection_name,
+        collection_name=args.collection,
         embedding_function=embedding_function,
         model=model,
         debug=logger.isEnabledFor(logging.DEBUG),
     )
 
     # Perform iterative search
-    search_result = orchestrator.perform_iterative_search(query)
+    search_result = orchestrator.perform_iterative_search(args.query)
 
     if logger.isEnabledFor(logging.DEBUG):
         for iteration in search_result.iterations:
@@ -128,14 +125,14 @@ def search(
             borders_only="top_bottom",
         )
 
-    if dry_run:
+    if args.dry_run:
         exit(0)
 
     response = client_llm.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query},
+            {"role": "user", "content": args.query},
         ],
     )
 
@@ -155,38 +152,25 @@ def search(
 
 def process_search(
     client: ClientAPI,
-    collection: str,
-    query: str,
-    llm: str,
-    model: str,
-    dry_run: bool,
-    embedding_model: str,
-    embedding_llm: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
-    ollama_host: str,
-    ollama_port: int,
+    args: argparse.Namespace,
 ) -> None:
     """Process search operation"""
-    logger.debug(f"Searching collection '{collection}' with query '{query}'")
+    logger.debug(f"Searching collection '{args.collection}' with query '{args.query}'")
 
     # Validate and get best available model
     validated_model = get_best_model(
-        llm, ollama_host, ollama_port, model, "chat"
+        args.llm, args.ollama_host, args.ollama_port, args.model, "chat"
     )
 
-    client_llm = create_llm_client(llm, ollama_host, ollama_port)
-    embedding_function = set_embedding_function(
-        embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
-    )
+    client_llm = create_llm_client(args=args)
+
+    embedding_function = set_embedding_function(args=args)
 
     search(
-        client_llm,
-        validated_model,
-        client,
-        collection,
-        query,
-        dry_run,
-        embedding_function,
+        client_llm=client_llm,
+        validated_model=validated_model,
+        client=client,
+        embedding_function=embedding_function,
+        args=args,
     )
     logger.debug("Search completed")

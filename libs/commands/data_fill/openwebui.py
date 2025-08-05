@@ -1,6 +1,6 @@
 import requests
 import logging
-from typing import Optional
+import argparse
 
 logger = logging.getLogger("RAG.OpenWebUI")
 
@@ -8,14 +8,12 @@ logger = logging.getLogger("RAG.OpenWebUI")
 class OpenWebUIUploader:
     def __init__(
         self,
-        api_url: str,
-        api_key: str,
-        knowledge_id: Optional[str] = None,
+        args: argparse.Namespace,
         timeout: int = 60,
     ):
-        self.api_url = api_url.rstrip("/")
-        self.api_key = api_key
-        self.knowledge_id = knowledge_id
+        self.api_url = args.open_webui_url.rstrip("/")
+        self.api_key = args.open_webui_api_key
+        self.knowledge_id = args.open_webui_knowledge_id
         self.timeout = timeout
 
     def upload_file(self, file, filename: str) -> str:

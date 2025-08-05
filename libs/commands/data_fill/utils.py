@@ -1,3 +1,4 @@
+import argparse
 import re
 import logging
 from bs4 import BeautifulSoup
@@ -8,11 +9,11 @@ from langchain_core.documents import Document
 logger = logging.getLogger("RAG")
 
 
-def log_data_fill_options(cleanup: bool, clean_content: bool, enable_wisdom: bool, fabric_command: str) -> None:
+def log_data_fill_options(args: argparse.Namespace) -> None:
     """Log data fill options for user feedback."""
-    if cleanup:
+    if args.cleanup:
         logger.info("Cleanup enabled: collection will be deleted before filling.")
-    if clean_content:
+    if args.clean_content:
         logger.info(
             "Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion."
         )
@@ -20,9 +21,9 @@ def log_data_fill_options(cleanup: bool, clean_content: bool, enable_wisdom: boo
         logger.info(
             "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
         )
-    if enable_wisdom:
+    if args.enable_wisdom:
         logger.info(
-            f"Wisdom extraction enabled: {fabric_command} will be used to extract key insights."
+            f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights."
         )
 
 

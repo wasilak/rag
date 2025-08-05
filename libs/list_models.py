@@ -1,8 +1,10 @@
+import argparse
 import logging
 from typing import List, Dict, Optional
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+
 from .models import get_model_manager, ModelManager
 import humanize
 
@@ -38,69 +40,40 @@ def get_cached_models(provider: str) -> Optional[List[Dict]]:
     return _cached_models.get(provider)
 
 
-def process_list_models(
-    provider: str, force_refresh: bool = False, silent: bool = False,
-    ollama_host: str = "127.0.0.1", ollama_port: int = 11434
-) -> Optional[List[Dict]]:
-    """Process the list-models command
+def process_list_models(args: argparse.Namespace, force_refresh: bool = False) -> Optional[List[Dict]]:
 
-    Args:
-        provider: LLM provider to list models for (ollama, openai, gemini)
-        force_refresh: Force refresh of cached models
-        silent: If True, don't display tables/output (for pre-caching)
-
-    Returns:
-        List of models if successful, None otherwise
-    """
     # Check cache first unless force refresh requested
-    if not force_refresh and provider in _cached_models:
-        logger.debug(f"Using cached models for {provider}")
-        models = _cached_models[provider]
-        if not silent:
-            _display_models_table(provider, models)
-            _display_default_models(provider, _model_manager)
+    if not force_refresh and args.provider in _cached_models:
+        logger.debug(f"Using cached models for {args.provider}")
+        models = _cached_models[args.provider]
+        if not args.silent:
+            _display_models_table(args.provider, models)
+            _display_default_models(args.provider, _model_manager)
         return models
 
-    if not silent:
-        logger.info(f"Listing available models for {provider}")
-    else:
-        logger.debug(f"Verifying models for {provider}")
+    logger.debug(f"Verifying models for {args.provider}")
 
     try:
-        initialize_model_manager(ollama_host, ollama_port)
+        initialize_model_manager(args.ollama_host, args.ollama_port)
         if _model_manager is None:
             console.print("[red]Failed to initialize model manager[/red]")
             return None
 
-        models = _model_manager.list_models(provider)
+        models = _model_manager.list_models(args.provider)
 
         if not models:
-            if not silent:
-                console.print(
-                    f"[red]No models found for {provider} or unable to connect[/red]"
-                )
-            else:
-                logger.warning(f"No models found for {provider} or unable to connect")
+            logger.warning(f"No models found for {args.provider} or unable to connect")
             return None
 
         # Cache the models
-        _cached_models[provider] = models
+        _cached_models[args.provider] = models
 
-        if not silent:
-            # Display models in a nice table format
-            _display_models_table(provider, models)
-
-            # Show default models
-            _display_default_models(provider, _model_manager)
-        else:
-            logger.debug(f"Successfully verified {len(models)} models for {provider}")
-
+        logger.debug(f"Successfully verified {len(models)} models for {args.provider}")
         return models
 
     except Exception as e:
-        logger.error(f"Error listing models for {provider}: {e}")
-        if not silent:
-            console.print(f"[red]Error: {e}[/red]")
+        logger.error(f"Error listing models for {args.provider}: {e}")
+        console.print(f"[red]Error listing models for {args.provider}: {e}[/red]")
         return None
 
 

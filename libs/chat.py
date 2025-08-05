@@ -1,3 +1,4 @@
+import argparse
 import os
 import logging
 from typing import List, Dict, Any, Optional
@@ -728,37 +729,24 @@ class ChatApp(App):
         )
 
 
-def process_chat(
-    client: ClientAPI,
-    collection: str,
-    llm: str,
-    model: str,
-    embedding_model: str,
-    embedding_llm: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
-    ollama_host: str,
-    ollama_port: int,
-    chat_db_path: Optional[str] = None,
-) -> None:
-    """Process chat operation"""
+def process_chat(client: ClientAPI, args: argparse.Namespace) -> None:
     # Disable logging during chat to prevent UI interference
     logging.getLogger().handlers.clear()
     logging.getLogger().setLevel(logging.CRITICAL)
 
-    logger.debug(f"Starting chat interface for collection '{collection}'")
+    logger.debug(f"Starting chat interface for collection '{args.collection}'")
 
     app = ChatApp(
         client,
-        collection,
-        llm,
-        model,
-        embedding_model,
-        embedding_llm,
-        embedding_ollama_host,
-        embedding_ollama_port,
-        ollama_host,
-        ollama_port,
+        args.collection,
+        args.llm,
+        args.model,
+        args.embedding_model,
+        args.embedding_llm,
+        args.embedding_ollama_host,
+        args.embedding_ollama_port,
+        args.ollama_host,
+        args.ollama_port,
     )
     app.run()
 

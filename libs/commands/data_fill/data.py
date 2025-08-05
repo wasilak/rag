@@ -25,12 +25,7 @@ def process_data_fill(
     client: Optional[ClientAPI],
     args: argparse.Namespace,
 ) -> None:
-    log_data_fill_options(
-        cleanup=args.cleanup,
-        clean_content=args.clean_content,
-        enable_wisdom=args.extract_wisdom,
-        fabric_command=args.fabric_command,
-    )
+    log_data_fill_options(args=args)
 
     collection = None
     if client is not None and args.cleanup:
@@ -40,21 +35,11 @@ def process_data_fill(
     # Set up OpenWebUIUploader if needed
     openwebui_uploader = None
     if args.upload_to_open_webui:
-        openwebui_uploader = OpenWebUIUploader(
-            api_url=args.open_webui_url,
-            api_key=args.open_webui_api_key,
-            knowledge_id=args.open_webui_knowledge_id or None,
-        )
+        openwebui_uploader = OpenWebUIUploader(args=args)
 
     for source_path in args.source_path:
 
-        documents = load_documents(
-            source_path=source_path,
-            mode=args.mode,
-            clean_content=args.clean_content,
-            enable_wisdom=args.extract_wisdom,
-            fabric_command=args.fabric_command,
-        )
+        documents = load_documents(source_path=source_path, args=args)
 
         if len(documents) == 0:
             logger.warning(f"No documents found in {source_path}. Skipping...")
@@ -62,7 +47,6 @@ def process_data_fill(
 
         process_source_path(
             source_path=source_path,
-            collection_name=args.collection,
             collection=collection,
             args=args,
             documents=documents,
@@ -72,7 +56,6 @@ def process_data_fill(
 
 def process_source_path(
         source_path: str,
-        collection_name: str,
         collection: Collection,
         args: argparse.Namespace,
         documents: List[Document],
@@ -146,7 +129,7 @@ def process_source_path(
             logger.debug(f"Processing {source_path} with id prefix {id_prefix}")
 
             logger.debug(
-                f"Inserting {len(documents)} documents into ChromaDB collection '{collection_name}'"
+                f"Inserting {len(documents)} documents into ChromaDB collection '{args.collection}'"
             )
 
             insert_into_collection(

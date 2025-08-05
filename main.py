@@ -53,12 +53,7 @@ def main():
 
     # Handle list-models command (doesn't need ChromaDB client)
     if args.subparser == "list-models":
-        process_list_models(
-            provider=args.provider,
-            force_refresh=True,
-            ollama_host=args.ollama_host,
-            ollama_port=args.ollama_port
-        )
+        process_list_models(args=args, force_refresh=True)
         return
 
     # Pre-cache models that will be needed based on the LLM provider being used
@@ -81,10 +76,7 @@ def main():
         pre_cache_llm_models(
             requirements=cache_requirements,
             process_list_models=process_list_models,
-            ollama_host=args.ollama_host,
-            ollama_port=args.ollama_port,
-            embedding_ollama_host=args.embedding_ollama_host,
-            embedding_ollama_port=args.embedding_ollama_port
+            args=args,
         )
 
         if len(args.chromadb_path) > 0:
@@ -99,95 +91,26 @@ def main():
 
     if args.subparser == "data-fill":
 
-        process_data_fill(
-            client=client,
-            args=args,
-            # collection_name=args.collection,
-            # source_paths=args.source_path,
-            # mode=args.mode,
-            # cleanup=args.cleanup,
-            # embedding_model=args.embedding_model,
-            # embedding_llm=args.embedding_llm,
-            # embedding_ollama_host=args.embedding_ollama_host,
-            # embedding_ollama_port=args.embedding_ollama_port,
-            # bucket_name=args.bucket_name,
-            # bucket_path=args.bucket_path,
-            # clean_content=args.clean_content,
-            # enable_wisdom=args.extract_wisdom,
-            # fabric_command=args.fabric_command,
-            # chunk_size=args.chunk_size,
-            # chunk_overlap=args.chunk_overlap,
-            # insert_into_chroma=insert_into_chroma,
-            # upload_to_s3=getattr(args, "upload_to_s3", False),
-            # upload_to_open_webui=getattr(args, "upload_to_open_webui", False),
-            # open_webui_url=getattr(args, "open_webui_url", "http://localhost:3000"),
-            # open_webui_api_key=getattr(args, "open_webui_api_key", ""),
-            # open_webui_knowledge_id=getattr(args, "open_webui_knowledge_id", ""),
-        )
+        process_data_fill(client=client, args=args)
 
     elif args.subparser == "search":
         if client is None:
             logger.error("ChromaDB client is not initialized. Cannot perform search.")
             return
-        process_search(
-            client=client,
-            collection=args.collection,
-            query=args.query,
-            llm=args.llm,
-            model=args.model,
-            dry_run=args.dry_run,
-            embedding_model=args.embedding_model,
-            embedding_llm=args.embedding_llm,
-            embedding_ollama_host=args.embedding_ollama_host,
-            embedding_ollama_port=args.embedding_ollama_port,
-            ollama_host=args.ollama_host,
-            ollama_port=args.ollama_port,
-        )
+
+        process_search(client=client, args=args)
 
     elif args.subparser == "chat":
         if client is None:
             logger.error("ChromaDB client is not initialized. Cannot start chat.")
             return
-        process_chat(
-            client=client,
-            collection=args.collection,
-            llm=args.llm,
-            model=args.model,
-            embedding_model=args.embedding_model,
-            embedding_llm=args.embedding_llm,
-            embedding_ollama_host=args.embedding_ollama_host,
-            embedding_ollama_port=args.embedding_ollama_port,
-            ollama_host=args.ollama_host,
-            ollama_port=args.ollama_port,
-            chat_db_path=args.chat_db_path,
-        )
+        process_chat(client=client, args=args)
 
     elif args.subparser == "web":
         if client is None:
             logger.error("ChromaDB client is not initialized. Cannot start web interface.")
             return
-        process_web(
-            client=client,
-            collection_name=args.collection,
-            llm=args.llm,
-            model=args.model,
-            embedding_model=args.embedding_model,
-            embedding_llm=args.embedding_llm,
-            embedding_ollama_host=args.embedding_ollama_host,
-            embedding_ollama_port=args.embedding_ollama_port,
-            ollama_host=args.ollama_host,
-            ollama_port=args.ollama_port,
-            port=args.port,
-            host=args.host,
-            debug=args.debug,
-            browser=args.browser,
-            cors_origins=args.cors_origins,
-            secret_key=args.secret_key,
-            max_history=args.max_history,
-            timeout=args.timeout,
-            workers=args.workers,
-            chat_db_path=args.chat_db_path,
-        )
+        process_web(client=client, args=args)
 
 
 if __name__ == "__main__":

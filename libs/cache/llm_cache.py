@@ -1,5 +1,6 @@
 """LLM caching functionality."""
 
+import argparse
 import logging
 from typing import Set, NamedTuple
 from typing_extensions import TypeAlias
@@ -44,11 +45,7 @@ def get_providers_to_cache(requirements: CacheRequirements) -> ProvidersToCacheS
 def pre_cache_llm_models(
     requirements: CacheRequirements,
     process_list_models,  # Cannot type this due to circular import
-    *,
-    ollama_host: str,
-    ollama_port: int,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
+    args: argparse.Namespace,
 ) -> None:
     """Pre-cache LLM models based on command requirements.
 
@@ -69,15 +66,14 @@ def pre_cache_llm_models(
             if provider == "ollama":
                 if requirements.subcommand == "data-fill":
                     # data-fill only uses Ollama for embeddings
-                    host, port = embedding_ollama_host, embedding_ollama_port
+                    host, port = args.embedding_ollama_host, args.embedding_ollama_port
                     logger.debug(f"data-fill with Ollama: using embedding settings {host}:{port}")
-                elif (requirements.llm_provider == "ollama" and
-                      requirements.embedding_llm_provider == "ollama"):
+
+                elif (requirements.llm_provider == "ollama" and requirements.embedding_llm_provider == "ollama"):
                     # Both LLM and embedding use Ollama - check if they use different instances
-                    if (ollama_host == embedding_ollama_host and
-                        ollama_port == embedding_ollama_port):
+                    if (args.ollama_host == args.embedding_ollama_host and args.ollama_port == args.embedding_ollama_port):
                         # Same Ollama instance for both - use LLM settings
-                        host, port = ollama_host, ollama_port
+                        host, port = args.ollama_host, args.ollama_port
                         logger.debug(
                             "Ollama for both LLM and embedding (same instance): "
                             f"using LLM settings {host}:{port}"
@@ -85,23 +81,23 @@ def pre_cache_llm_models(
                     else:
                         # Different Ollama instances - use embedding settings
                         # since that's what most operations need
-                        host, port = embedding_ollama_host, embedding_ollama_port
+                        host, port = args.embedding_ollama_host, args.embedding_ollama_port
                         logger.debug(
                             "Ollama for both LLM and embedding (different instances): "
                             f"using embedding settings {host}:{port}"
                         )
                 elif requirements.llm_provider == "ollama":
                     # Only LLM uses Ollama
-                    host, port = ollama_host, ollama_port
+                    host, port = args.ollama_host, args.ollama_port
                     logger.debug(f"Ollama for LLM only: using {host}:{port}")
                 else:
                     # Only embedding uses Ollama (or this is embedding pre-caching)
-                    host, port = embedding_ollama_host, embedding_ollama_port
+                    host, port = args.embedding_ollama_host, args.embedding_ollama_port
                     logger.debug(f"Ollama for embedding: using {host}:{port}")
             else:
                 # For non-Ollama providers (gemini, openai), use embedding Ollama settings
                 # since they might need Ollama for embeddings
-                host, port = embedding_ollama_host, embedding_ollama_port
+                host, port = args.embedding_ollama_host, args.embedding_ollama_port
                 logger.debug(f"Non-Ollama provider {provider}: using embedding Ollama {host}:{port}")
 
             process_list_models(
