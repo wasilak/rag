@@ -33,13 +33,13 @@ def extract_wisdom(content: str, fabric_command: str = "fabric") -> str:
             logger.warning("Fabric produced no output")
             if result.stderr:
                 logger.debug(f"Fabric stderr: {result.stderr}")
-            return None
+            return ""
 
     except subprocess.CalledProcessError as e:
         logger.error(f"Fabric command failed: {e}")
         if e.stderr:
             logger.debug(f"Fabric stderr: {e.stderr}")
-        return None
+        return ""
     except Exception as e:
         logger.error(f"Error running Fabric: {e}")
-        return None
+        return ""
