@@ -14,7 +14,7 @@ from .openwebui import OpenWebUIUploader
 from .validation import validate_s3_bucket_name, validate_s3_bucket_path
 from .documents import load_documents
 from .collection import delete_collection, create_get_collection, insert_into_collection
-from .utils import log_data_fill_options, format_content, sanitize_filename, parse_source_with_title
+from .utils import log_data_fill_options, format_content, sanitize_filename, parse_source_with_title, add_keybert_tags_to_doc
 from .s3 import upload_markdown_to_s3
 from .wisdom import extract_wisdom, check_fabric_installed
 
@@ -76,6 +76,8 @@ def process_source_path(
             logger.debug("Extracting wisdom with Fabric")
             wisdom = extract_wisdom(doc.page_content, args.fabric_command, args.fabric_pattern)
             logger.info("Wisdom extracted successfully")
+
+        doc = add_keybert_tags_to_doc(doc)
 
         doc = format_content(doc, wisdom)
 

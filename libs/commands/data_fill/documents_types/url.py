@@ -2,7 +2,7 @@ import logging
 from typing import List
 from langchain_core.documents import Document
 from langchain_community.document_loaders import AsyncHtmlLoader
-from ..utils import extract_title_from_html, process_html_documents, convert_to_markdown
+from ..utils import extract_title_from_html, process_html_documents, convert_to_markdown, medium_extract
 
 logger = logging.getLogger("RAG")
 
@@ -28,6 +28,8 @@ def load_url_documents(
 
     # Extract and store titles before cleaning
     for doc in docs:
+        # Medium extraction step
+        doc.page_content = medium_extract(doc.page_content)
         title = doc.metadata.get("title", extract_title_from_html(doc.page_content))
         doc.metadata["title"] = title
         doc.metadata["source"] = url

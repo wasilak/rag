@@ -249,6 +249,12 @@ def parse_arguments() -> argparse.Namespace:
         default=int(get_env_default("RAG_CHUNK_OVERLAP", "200")),
         help="Overlap between chunks (env: RAG_CHUNK_OVERLAP)",
     )
+    data_subparser.add_argument(
+        "--convert-to-markdown",
+        action="store_true",
+        default=False,
+        help="Convert HTML files to Markdown using the same rules as URL sources (file-based flow only)",
+    )
 
     # search subcommand
     search_parser = subparsers.add_parser(

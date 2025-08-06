@@ -7,6 +7,9 @@ from langchain_community.document_transformers import MarkdownifyTransformer
 from langchain_core.documents import Document
 from ruamel.yaml import YAML
 from io import StringIO
+from keybert import KeyBERT
+import trafilatura
+import json
 
 logger = logging.getLogger("RAG")
 
@@ -96,7 +99,11 @@ def process_html_documents(
         total_original = sum(len(doc.page_content) for doc in docs)
         cleaned_docs = []
         for doc in docs:
-            cleaned_html = clean_html_content(doc.page_content)
+            # Medium extraction step
+            cleaned_html = medium_extract(doc.page_content)
+            cleaned_html = clean_html_content(cleaned_html)
+            cleaned_html = apply_trafilatura(cleaned_html)
+
             doc.page_content = cleaned_html
             cleaned_docs.append(doc)
         total_cleaned = sum(len(doc.page_content) for doc in cleaned_docs)
@@ -163,6 +170,15 @@ def clean_html_content(raw_html: str) -> str:
     return str(soup)
 
 
+def apply_trafilatura(raw_html: str) -> str:
+    """Extract main readable content from HTML using trafilatura. Fallback to original HTML if extraction fails."""
+    extracted = trafilatura.extract(raw_html, include_comments=False, include_tables=True, include_formatting=True)
+    if extracted and extracted.strip():
+        return extracted
+    # Fallback: return original HTML (or could return empty string)
+    return raw_html
+
+
 def metadata_to_yaml(metadata: dict) -> str:
     """Convert metadata dict to YAML frontmatter using ruamel.yaml for robust escaping."""
     yaml = YAML()
@@ -181,6 +197,11 @@ def format_content(
     new_content = ""
     if len(doc.metadata) > 0:
         new_content += metadata_to_yaml(doc.metadata)
+    # Render tags as a single line of #tag after metadata
+    tags = doc.metadata.get('tags')
+    if tags and isinstance(tags, list) and tags:
+        tag_line = ' '.join(f"#{str(tag).replace(' ', '_')}" for tag in tags)
+        new_content += f"{tag_line}\n"
     if len(wisdom) > 0:
         new_content += f"""
 {wisdom}
@@ -199,3 +220,82 @@ def parse_source_with_title(source_path: str):
         source, title = source_path.split('||', 1)
         return source.strip(), title.strip()
     return source_path.strip(), None
+
+
+def extract_keywords_with_keybert(text: str, top_n: int = 5) -> list:
+    """Extract top_n keywords/phrases from text using KeyBERT, deduplicated and space-free."""
+    model = KeyBERT()
+    keywords = model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=top_n)
+    tags = [kw[0].replace(' ', '_') for kw in keywords]
+    seen = set()
+    deduped_tags = []
+    for tag in tags:
+        if tag not in seen:
+            seen.add(tag)
+            deduped_tags.append(tag)
+    return deduped_tags
+
+
+def add_keybert_tags_to_doc(doc: Document, top_n: int = 5):
+    if not doc.metadata.get('tags'):
+        tags = extract_keywords_with_keybert(doc.page_content, top_n=top_n)
+        doc.metadata['tags'] = tags
+    return doc
+
+
+def medium_extract(raw_html: str) -> str:
+    """
+    If the HTML contains a Medium window.__APOLLO_STATE__ script, extract article content and replace <body> with <body><article>...</article></body>.
+    Otherwise, return the original HTML.
+    """
+    soup = BeautifulSoup(raw_html, "html.parser")
+    script_tag = None
+    for tag in soup.find_all("script"):
+        if tag.string and "window.__APOLLO_STATE__" in tag.string:
+            script_tag = tag
+            break
+    if not script_tag:
+        return raw_html
+
+    try:
+        script_content = script_tag.string
+        json_start = script_content.find("{")
+        json_data = json.loads(script_content[json_start:])
+    except Exception:
+        return raw_html
+
+    post_key = next((k for k in json_data if k.startswith("Post:")), None)
+    if not post_key:
+        return raw_html
+
+    post = json_data[post_key]
+    paragraphs = post.get('content({"postMeteringOptions":{"referrer":""}})', {}).get("bodyModel", {}).get("paragraphs", [])
+    if not paragraphs:
+        return raw_html
+
+    article_html = ""
+    for para_ref in paragraphs:
+        para = json_data.get(para_ref["__ref"])
+        if not para:
+            continue
+        t = para.get("type")
+        text = para.get("text", "")
+        if t == "H3":
+            article_html += f"<h3>{text}</h3>\n"
+        elif t == "P":
+            article_html += f"<p>{text}</p>\n"
+        elif t == "PRE":
+            article_html += f"<pre>{text}</pre>\n"
+        elif t == "ULI":
+            article_html += f"<li>{text}</li>\n"
+        elif t == "BQ":
+            article_html += f"<blockquote>{text}</blockquote>\n"
+    new_body = soup.new_tag("body")
+    article_tag = soup.new_tag("article")
+    article_tag.append(BeautifulSoup(article_html, "html.parser"))
+    new_body.append(article_tag)
+    if soup.body:
+        soup.body.replace_with(new_body)
+    else:
+        soup.append(new_body)
+    return str(soup)
