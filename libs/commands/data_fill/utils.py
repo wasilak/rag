@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 from typing import List
 from langchain_community.document_transformers import MarkdownifyTransformer
 from langchain_core.documents import Document
+from ruamel.yaml import YAML
+from io import StringIO
 
 logger = logging.getLogger("RAG")
 
@@ -161,31 +163,24 @@ def clean_html_content(raw_html: str) -> str:
     return str(soup)
 
 
+def metadata_to_yaml(metadata: dict) -> str:
+    """Convert metadata dict to YAML frontmatter using ruamel.yaml for robust escaping."""
+    yaml = YAML()
+    yaml.default_flow_style = False
+    yaml.allow_unicode = True
+    stream = StringIO()
+    yaml.dump(metadata, stream)
+    yaml_content = stream.getvalue()
+    return f"---\n{yaml_content}---\n"
+
+
 def format_content(
     doc: Document,
     wisdom: str,
 ) -> Document:
     new_content = ""
-
-    # metadata format
-    # ---
-    # source: https://dev.to/mohit_nagaraj/building-a-kubernetes-operator-in-go-with-kube-shift-446h
-    # tags:
-    #   - acl
-    # ---
     if len(doc.metadata) > 0:
-        new_content += "---\n"
-        for key, value in doc.metadata.items():
-            if isinstance(value, str):
-                new_content += f"{key}: \"{value}\"\n"
-            elif isinstance(value, list):
-                new_content += f"{key}:\n"
-                for item in value:
-                    new_content += f"  - \"{item}\"\n"
-            else:
-                new_content += f"{key}: \"{str(value)}\"\n"
-        new_content += "---\n"
-
+        new_content += metadata_to_yaml(doc.metadata)
     if len(wisdom) > 0:
         new_content += f"""
 {wisdom}
@@ -193,11 +188,8 @@ def format_content(
 ---
 
         """
-
     new_content += f"\n{doc.page_content}"
-
     doc.page_content = new_content
-
     return doc
 
 
