@@ -1,8 +1,8 @@
 import logging
 from typing import List, Optional
-from openai import OpenAI
 from langchain_core.documents import Document
 from ...models import get_best_model
+from ...utils import create_openai_client
 
 logger = logging.getLogger("RAG")
 
@@ -29,31 +29,11 @@ class DocumentCleaner:
         self.model = get_best_model(
             llm_provider, ollama_host, ollama_port, model, "chat"
         )
-        self.client = self._create_llm_client()
+        self.client = create_openai_client(llm_provider, ollama_host, ollama_port)
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
         self.ollama_host = ollama_host
         self.ollama_port = ollama_port
-
-    def _create_llm_client(self) -> OpenAI:
-        """Create LLM client based on the provider"""
-        import os
-
-        if self.llm_provider == "ollama":
-            logger.debug("Using Ollama for document cleaning")
-            return OpenAI(
-                base_url=f"http://{self.ollama_host}:{self.ollama_port}/v1",
-                api_key="ollama",  # required, but unused
-            )
-        elif self.llm_provider == "gemini":
-            logger.debug("Using Gemini for document cleaning")
-            return OpenAI(
-                api_key=os.getenv("GEMINI_API_KEY"),
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-        else:
-            logger.debug("Using OpenAI for document cleaning")
-            return OpenAI()
 
     def clean_document(
         self, document: Document, cleaning_prompt: Optional[str] = None

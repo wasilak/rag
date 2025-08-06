@@ -2,6 +2,12 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.theme import Theme
+import os
+import logging
+from openai import OpenAI
+import tiktoken
+
+logger = logging.getLogger("RAG")
 
 
 def format_footnotes(metadatas: list[dict]) -> str:
@@ -74,3 +80,36 @@ def print_fancy_markdown(
         console.print(
             Panel(md_render, title=title, border_style=border_style, expand=True)
         )
+
+
+def create_openai_client(llm_provider: str, ollama_host: str, ollama_port: int) -> OpenAI:
+    """Creates an OpenAI-compatible client based on the LLM provider."""
+    if llm_provider == "ollama":
+        logger.debug("Using Ollama as LLM")
+        return OpenAI(
+            base_url=f"http://{ollama_host}:{ollama_port}/v1",
+            api_key="ollama",  # required, but unused
+        )
+    elif llm_provider == "gemini":
+        logger.debug("Using Gemini as LLM")
+        return OpenAI(
+            api_key=os.getenv("GEMINI_API_KEY"),
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+    else:
+        logger.debug("Using OpenAI as LLM")
+        return OpenAI()
+
+
+def get_tokenizer_for_model(model_name: str):
+    """Get appropriate tokenizer for the model."""
+    try:
+        if model_name.startswith("gpt-"):
+            return tiktoken.encoding_for_model(model_name)
+        elif model_name.startswith("claude-"):
+            return tiktoken.get_encoding("cl100k_base")
+        else:
+            return tiktoken.encoding_for_model("gpt-4")  # Default fallback
+    except Exception:
+        logger.warning(f"Could not get specific tokenizer for model '{model_name}'. Falling back to GPT-4 tokenizer.")
+        return tiktoken.encoding_for_model("gpt-4")

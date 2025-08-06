@@ -22,7 +22,7 @@ def set_embedding_function(args: argparse.Namespace) -> EmbeddingFunction:
         args.embedding_llm,
         args.embedding_ollama_host,
         args.embedding_ollama_port,
-        args.model,
+        args.embedding_model,  # <-- CORRECTED
         "embedding",
     )
 

@@ -1,33 +1,13 @@
-import os
 import logging
 import argparse
 from chromadb.api import ClientAPI
 from openai import OpenAI
 from .commands.data_fill.embedding import set_embedding_function
-from .utils import format_footnotes, print_fancy_markdown
+from .utils import format_footnotes, print_fancy_markdown, create_openai_client
 from .models import get_best_model
 from .search_orchestrator import SearchOrchestrator
 
 logger = logging.getLogger("RAG")
-
-
-def create_llm_client(args: argparse.Namespace) -> OpenAI:
-    """Create LLM client based on the provider"""
-    if args.llm == "ollama":
-        logger.debug("Using Ollama as LLM")
-        return OpenAI(
-            base_url=f"http://{args.ollama_host}:{args.ollama_port}/v1",
-            api_key="ollama",  # required, but unused
-        )
-    elif args.llm == "gemini":
-        logger.debug("Using Gemini as LLM")
-        return OpenAI(
-            api_key=os.getenv("GEMINI_API_KEY"),
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        )
-    else:
-        logger.debug("Using OpenAI as LLM")
-        return OpenAI()
 
 
 def search(
@@ -162,7 +142,7 @@ def process_search(
         args.llm, args.ollama_host, args.ollama_port, args.model, "chat"
     )
 
-    client_llm = create_llm_client(args=args)
+    client_llm = create_openai_client(args=args)
 
     embedding_function = set_embedding_function(args=args)
 

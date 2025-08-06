@@ -1,5 +1,4 @@
 import argparse
-import os
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -9,9 +8,8 @@ from textual.widgets import Header, Footer, Static, Button, Label, TextArea
 from textual import work
 from textual.binding import Binding
 from openai import OpenAI
-import tiktoken
 from .commands.data_fill.embedding import set_embedding_function
-from .utils import format_footnotes
+from .utils import format_footnotes, create_openai_client, get_tokenizer_for_model
 from .models import get_best_model
 from chromadb.api import ClientAPI
 from .chat_storage import ChatStorage, StoredChat
@@ -255,10 +253,10 @@ class ChatApp(App):
         )
         self.embedding_model = embedding_model
         self.embedding_llm = embedding_llm
-        self.llm_client = None
+        self.llm_client = create_openai_client(self.llm, self.ollama_host, self.ollama_port)
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
-        self.tokenizer = self._get_tokenizer()
+        self.tokenizer = get_tokenizer_for_model(self.model)
         if chat_db_path:
             self.storage = ChatStorage(chat_db_path)
         self.total_tokens_used = 0
@@ -362,7 +360,6 @@ class ChatApp(App):
         # Set Tokyo Night theme as default
         self.theme = "tokyo-night"
 
-        self.llm_client = self._create_llm_client()
         self.embedding_function = set_embedding_function(
             self.embedding_llm,
             self.embedding_model,
@@ -381,20 +378,6 @@ class ChatApp(App):
         # Focus on input field
         text_area = self.query_one("#message-input")
         text_area.focus()
-
-    def _get_tokenizer(self):
-        """Get appropriate tokenizer for the model"""
-        try:
-            if self.model.startswith("gpt-"):
-                return tiktoken.encoding_for_model(self.model)
-            elif self.model.startswith("claude-"):
-                return tiktoken.get_encoding("cl100k_base")  # Claude uses cl100k_base
-            else:
-                # Default to GPT-4 tokenizer for other models
-                return tiktoken.encoding_for_model("gpt-4")
-        except Exception:
-            # Fallback to GPT-4 tokenizer
-            return tiktoken.encoding_for_model("gpt-4")
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text"""
@@ -429,24 +412,6 @@ class ChatApp(App):
         token_counts = self._count_conversation_tokens()
         token_info = f"💬 Messages: {len(self.conversation_history)} | 🎯 Total Tokens: {token_counts['total']} | 👤 User: {token_counts['user']} | 🤖 Assistant: {token_counts['assistant']}"
         self.query_one("#token-info", Label).update(token_info)
-
-    def _create_llm_client(self) -> OpenAI:
-        """Create LLM client based on the provider"""
-        if self.llm == "ollama":
-            logger.debug("Using Ollama as LLM")
-            return OpenAI(
-                base_url=f"http://{self.ollama_host}:{self.ollama_port}/v1",
-                api_key="ollama",  # required, but unused
-            )
-        elif self.llm == "gemini":
-            logger.debug("Using Gemini as LLM")
-            return OpenAI(
-                api_key=os.getenv("GEMINI_API_KEY"),
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-        else:
-            logger.debug("Using OpenAI as LLM")
-            return OpenAI()
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Handle text area changes"""

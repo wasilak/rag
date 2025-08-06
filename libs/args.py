@@ -32,6 +32,7 @@ def parse_arguments() -> argparse.Namespace:
     - RAG_ENABLE_CLEANING: Enable document cleaning (default: "false")
     - RAG_EXTRACT_WISDOM: Enable Fabric wisdom extraction (default: "false")
     - RAG_FABRIC_COMMAND: Fabric command name (default: "fabric")
+    - RAG_FABRIC_PATTERN: Fabric pattern to use for wisdom extraction (default: "create_micro_summary")
     - RAG_CHUNK_SIZE: Size of text chunks for splitting (default: 600)
     - RAG_CHUNK_OVERLAP: Overlap between chunks (default: 200)
     - RAG_WEB_PORT: Web server port (default: 8080)
@@ -215,15 +216,13 @@ def parse_arguments() -> argparse.Namespace:
     data_subparser.add_argument(
         "--clean-content",
         action="store_true",
-        default=((get_env_default("RAG_CLEAN_CONTENT", "false") or "false").lower()
-                 == "true"),
+        default=((get_env_default("RAG_CLEAN_CONTENT", "false") or "false").lower() == "true"),
         help="Clean document content by removing navigation, ads, and UI clutter before processing (env: RAG_CLEAN_CONTENT)",
     )
     data_subparser.add_argument(
         "--extract-wisdom",
         action="store_true",
-        default=((get_env_default("RAG_EXTRACT_WISDOM", "false") or "false").lower()
-                 == "true"),
+        default=((get_env_default("RAG_EXTRACT_WISDOM", "false") or "false").lower() == "true"),
         help="Extract wisdom from content using Fabric (requires Fabric to be installed) (env: RAG_EXTRACT_WISDOM)",
     )
     data_subparser.add_argument(
@@ -231,6 +230,12 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default=get_env_default("RAG_FABRIC_COMMAND", "fabric"),
         help="Fabric command name (e.g., 'fabric' or 'fabric-ai') (env: RAG_FABRIC_COMMAND)",
+    )
+    data_subparser.add_argument(
+        "--fabric-pattern",
+        type=str,
+        default=get_env_default("RAG_FABRIC_PATTERN", "create_micro_summary"),
+        help="Fabric pattern to use for wisdom extraction (default: 'create_micro_summary') (env: RAG_FABRIC_PATTERN)",
     )
     data_subparser.add_argument(
         "--chunk-size",

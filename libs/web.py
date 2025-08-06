@@ -6,12 +6,10 @@ from functools import wraps
 from flask import Flask, jsonify, send_from_directory, request
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-from openai import OpenAI
-import tiktoken
 from engineio.payload import Payload
 from chromadb.api import ClientAPI
 from .commands.data_fill.embedding import set_embedding_function
-from .utils import format_footnotes
+from .utils import format_footnotes, create_openai_client, get_tokenizer_for_model
 from .models import get_best_model
 from .chat_storage import ChatStorage
 
@@ -54,50 +52,21 @@ class WebChatManager:
         self.ollama_port = ollama_port
         self.max_history = max_history
 
-        self.llm_client = self._create_llm_client()
+        self.llm_client = create_openai_client(self.llm, self.ollama_host, self.ollama_port)
         self.embedding_function = set_embedding_function(
             embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
         )
-        self.tokenizer = self._get_tokenizer()
+        self.tokenizer = get_tokenizer_for_model(self.model)
         self.storage = ChatStorage(chat_db_path) if chat_db_path else None
 
-        # Remove global current_chat_id and conversation_history
-        # Use per-session state in handlers below
+    def _get_session_state(self, sid: str) -> Dict[str, Any]:
+        if sid not in chat_sessions:
+            chat_sessions[sid] = {"current_chat_id": None, "conversation_history": []}
+        return chat_sessions[sid]
 
-        # Auto-load latest chat from storage if available (for legacy, not used in web)
-        # (No-op for per-session)
-
-    def _create_llm_client(self) -> OpenAI:
-        """Create LLM client based on the provider"""
-        if self.llm == "ollama":
-            logger.debug("Using Ollama as LLM")
-            return OpenAI(
-                base_url=f"http://{self.ollama_host}:{self.ollama_port}/v1",
-                api_key="ollama",  # required, but unused
-            )
-        elif self.llm == "gemini":
-            logger.debug("Using Gemini as LLM")
-            return OpenAI(
-                api_key=os.getenv("GEMINI_API_KEY"),
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-        else:
-            logger.debug("Using OpenAI as LLM")
-            return OpenAI()
-
-    def _get_tokenizer(self):
-        """Get appropriate tokenizer for the model"""
-        try:
-            if self.model.startswith("gpt-"):
-                return tiktoken.encoding_for_model(self.model)
-            elif self.model.startswith("claude-"):
-                return tiktoken.get_encoding("cl100k_base")  # Claude uses cl100k_base
-            else:
-                # Default to GPT-4 tokenizer for other models
-                return tiktoken.encoding_for_model("gpt-4")
-        except Exception:
-            # Fallback to GPT-4 tokenizer
-            return tiktoken.encoding_for_model("gpt-4")
+    def _update_session_state(self, sid: str, current_chat_id: Optional[str], conversation_history: List[Dict[str, str]]):
+        chat_sessions[sid]["current_chat_id"] = current_chat_id
+        chat_sessions[sid]["conversation_history"] = conversation_history
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text"""
@@ -107,25 +76,24 @@ class WebChatManager:
             # Fallback: rough estimation (1 token ≈ 4 characters)
             return len(text) // 4
 
-    def count_conversation_tokens(self) -> Dict[str, int]:
-        """Count tokens in current conversation"""
+    def count_conversation_tokens(self, sid: str) -> Dict[str, int]:
+        session_state = self._get_session_state(sid)
+        conversation_history = session_state["conversation_history"]
         total_tokens = 0
         user_tokens = 0
         assistant_tokens = 0
-
-        for message in self.conversation_history:
+        for message in conversation_history:
             tokens = self._count_tokens(message["content"])
             total_tokens += tokens
             if message["role"] == "user":
                 user_tokens += tokens
             else:
                 assistant_tokens += tokens
-
         return {
             "total": total_tokens,
             "user": user_tokens,
             "assistant": assistant_tokens,
-            "messages": len(self.conversation_history),
+            "messages": len(conversation_history),
         }
 
     def _build_system_prompt(self, results: Dict[str, Any]) -> str:
@@ -188,143 +156,84 @@ class WebChatManager:
 
         return system_prompt
 
-    def generate_response_stream(self, user_message: str) -> Generator[str, None, Optional[str]]:
-        """Generate streaming response using RAG. Returns new_chat_id if created."""
+    def generate_response_stream(self, sid: str, user_message: str) -> Generator[str, None, Optional[str]]:
+        session_state = self._get_session_state(sid)
+        current_chat_id = session_state["current_chat_id"]
+        conversation_history = session_state["conversation_history"]
+        conversation_history.append({"role": "user", "content": user_message})
         new_chat_id = None
+        if self.storage:
+            new_chat_id = self._save_message(current_chat_id, "user", user_message)
+            if new_chat_id:
+                current_chat_id = new_chat_id
+        if not self.client:
+            raise ValueError("ChromaDB client not initialized")
+        collection = self.client.get_or_create_collection(
+            name=self.collection_name,
+            embedding_function=self.embedding_function
+        )
+        results = collection.query(query_texts=[user_message], n_results=4)
+        results_dict: Dict[str, Any] = {
+            "documents": results["documents"],
+            "metadatas": results["metadatas"],
+            "ids": results["ids"],
+            "distances": results["distances"]
+        }
+        system_prompt = self._build_system_prompt(results_dict)
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(conversation_history)
+        response = self.llm_client.chat.completions.create(
+            model=self.model, messages=messages, stream=True  # type: ignore
+        )
+        full_response = ""
         try:
-            # Add to conversation history
-            self.conversation_history.append({"role": "user", "content": user_message})
-            if self.storage:
-                new_chat_id = self._save_message("user", user_message)
-
-            # Search for relevant documents
-            if not self.client:
-                raise ValueError("ChromaDB client not initialized")
-
-            collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                embedding_function=self.embedding_function
-            )
-
-            results = collection.query(query_texts=[user_message], n_results=4)
-
-            # Convert ChromaDB query results to dict
-            results_dict: Dict[str, Any] = {
-                "documents": results["documents"],
-                "metadatas": results["metadatas"],
-                "ids": results["ids"],
-                "distances": results["distances"]
-            }
-
-            # Build system prompt with context
-            system_prompt = self._build_system_prompt(results_dict)
-
-            # Prepare messages for LLM
-            messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(self.conversation_history)
-
-            # Generate streaming response
-            response = self.llm_client.chat.completions.create(
-                model=self.model, messages=messages, stream=True  # type: ignore
-            )
-
-            full_response = ""
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     chunk_content = chunk.choices[0].delta.content
                     full_response += chunk_content
                     yield chunk_content
-
-            # Add complete response to conversation history
             if full_response:
-                self.conversation_history.append(
-                    {"role": "assistant", "content": full_response}
-                )
-                self._save_message("assistant", full_response)
-                self._trim_conversation_history()
-
+                conversation_history.append({"role": "assistant", "content": full_response})
+                self._save_message(current_chat_id, "assistant", full_response)
+                if len(conversation_history) > self.max_history:
+                    excess = len(conversation_history) - self.max_history
+                    conversation_history = conversation_history[excess:]
+            self._update_session_state(sid, current_chat_id, conversation_history)
             return new_chat_id
-
         except Exception as e:
             logger.error(f"Error generating streaming response: {e}")
             yield f"Error: {str(e)}"
             return None
 
-    def _trim_conversation_history(self):
-        """Trim conversation history to max_history length"""
-        if len(self.conversation_history) > self.max_history:
-            # Keep the most recent messages, maintaining pairs when possible
-            excess = len(self.conversation_history) - self.max_history
-            self.conversation_history = self.conversation_history[excess:]
-            logger.debug(f"Trimmed conversation history to {len(self.conversation_history)} messages")
+    def clear_conversation(self, sid: str):
+        session_state = self._get_session_state(sid)
+        session_state["conversation_history"] = []
+        session_state["current_chat_id"] = None
 
-    def clear_conversation(self):
-        """Clear conversation history"""
-        self.conversation_history.clear()
-        if self.storage and self.current_chat_id:
-            self.current_chat_id = None
-
-    def _load_chat(self, chat_id: str) -> bool:
-        """Load chat from storage"""
+    def _load_chat_for_session(self, sid: str, chat_id: str) -> bool:
         if not self.storage:
             return False
-
         chat = self.storage.get_chat(chat_id)
         if not chat:
             return False
-
-        self.conversation_history = [
+        conversation_history = [
             {"role": msg.role, "content": msg.content}
             for msg in chat.messages
         ]
-        self.current_chat_id = chat_id
+        self._update_session_state(sid, chat_id, conversation_history)
         return True
 
-    def list_chats(self) -> List[Dict[str, Any]]:
-        """List all available chats"""
-        if not self.storage:
-            return []
-
-        chats = self.storage.list_chats()
-        return [{
-            "id": chat.id,
-            "title": chat.title,
-            "created_at": chat.created_at.isoformat(),
-            "last_updated": chat.last_updated.isoformat()
-        } for chat in chats]
-
-    def _save_message(self, role: str, content: str) -> Optional[str]:
-        """Save message to storage if enabled. Returns new chat_id if created."""
+    def _save_message(self, current_chat_id: Optional[str], role: str, content: str) -> Optional[str]:
         if not self.storage:
             return None
-
         new_chat_id = None
-        if not self.current_chat_id:
+        if not current_chat_id:
             # This shouldn't happen with the new approach, but keep for safety
             trimmed = content.strip().replace('\n', ' ')
-            if len(trimmed) > 100:
-                title = trimmed[:100].rstrip() + "..."
-            else:
-                title = trimmed
-            self.current_chat_id = self.storage.create_chat(title)
-            new_chat_id = self.current_chat_id
-        else:
-            # Update chat title with first user message if it's still "New Chat"
-            if role == "user":
-                chat = self.storage.get_chat(self.current_chat_id)
-                if chat and chat.title == "New Chat":
-                    trimmed = content.strip().replace('\n', ' ')
-                    if len(trimmed) > 100:
-                        title = trimmed[:100].rstrip() + "..."
-                    else:
-                        title = trimmed
-                    self.storage.update_chat_title(self.current_chat_id, title)
-
-        self.storage.add_message(
-            self.current_chat_id,
-            role,
-            content
-        )
+            title = (trimmed[:100].rstrip() + "...") if len(trimmed) > 100 else trimmed
+            current_chat_id = self.storage.create_chat(title)
+            new_chat_id = current_chat_id
+        self.storage.add_message(current_chat_id, role, content)
         return new_chat_id
 
     def get_config(self) -> Dict[str, Any]:
@@ -680,68 +589,46 @@ def create_app(
             return
 
         # Load the chat into the session
-        if chat_manager and chat_manager._load_chat(chat_id):
-            chat_sessions[sid] = {
-                "current_chat_id": chat_manager.current_chat_id,
-                "conversation_history": chat_manager.conversation_history
-            }
+        if chat_manager and chat_manager._load_chat_for_session(sid, chat_id):
             logger.info(f"Switched session {sid} to chat {chat_id}")
         else:
             logger.error(f"Failed to load chat {chat_id} for session {sid}")
 
     @socketio.on("send_message")
     def handle_message(data):
-        """Handle incoming chat message with streaming response"""
         from flask import request  # type: ignore[import]
         sid = request.sid  # type: ignore[attr-defined]
-        if sid not in chat_sessions:
-            chat_sessions[sid] = {"current_chat_id": None, "conversation_history": []}
-
         user_message = data.get("message", "").strip()
         if not user_message:
             return
-
-        # Emit that we're processing
         emit("message_status", {"status": "processing"})
-
-        # Generate streaming response
         try:
             if chat_manager is None:
                 emit("message_error", {"error": "Chat manager not initialized"})
                 return
-
-            # Patch chat_manager to use per-session state
-            chat_manager.current_chat_id = chat_sessions[sid]["current_chat_id"]
-            chat_manager.conversation_history = chat_sessions[sid]["conversation_history"]
-
-            stream = chat_manager.generate_response_stream(user_message)
+            stream = chat_manager.generate_response_stream(sid, user_message)
             new_chat_id = None
             for chunk in stream:
                 emit("message_chunk", {"chunk": chunk})
-            # After streaming is done, get the new_chat_id if any (from generator return value)
             try:
-                stream.send(None)
+                new_chat_id = stream.send(None)
             except StopIteration as e:
                 if hasattr(e, 'value'):
                     new_chat_id = e.value
-
-            # Save back per-session state
-            chat_sessions[sid]["current_chat_id"] = chat_manager.current_chat_id
-            chat_sessions[sid]["conversation_history"] = chat_manager.conversation_history
-
-            token_stats = chat_manager.count_conversation_tokens()
+            session_state = chat_manager._get_session_state(sid)
+            token_stats = chat_manager.count_conversation_tokens(sid)
             emit("message_complete", {
                 "status": "complete",
                 "tokens": token_stats,
                 "newChatId": new_chat_id
             })
-
-            # If we updated a chat title, emit a refresh signal
-            if new_chat_id is None and chat_manager.current_chat_id:
-                # Check if the current chat title was updated
-                chat = chat_manager.storage.get_chat(chat_manager.current_chat_id) if chat_manager.storage else None
-                if chat and chat.title != "New Chat":
-                    emit("chat_title_updated", {"chatId": chat_manager.current_chat_id, "title": chat.title})
+            if new_chat_id is None and session_state["current_chat_id"]:
+                chat = chat_manager.storage.get_chat(session_state["current_chat_id"]) if chat_manager.storage else None
+                if chat and chat.title == "New Chat":
+                    trimmed = user_message.strip().replace('\n', ' ')
+                    title = (trimmed[:100].rstrip() + "...") if len(trimmed) > 100 else trimmed
+                    chat_manager.storage.update_chat_title(session_state["current_chat_id"], title)
+                    emit("chat_title_updated", {"chatId": session_state["current_chat_id"], "title": title})
         except Exception as e:
             logger.error(f"Error in message handling: {e}")
             emit("message_error", {"error": str(e)})

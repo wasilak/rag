@@ -5,6 +5,7 @@ from chromadb.api.types import (
     Metadata,
     OneOrMany,
 )
+import hashlib
 
 logger = logging.getLogger("RAG")
 
@@ -22,7 +23,7 @@ def process_markdown_documents(
         i = 0
         for chunk in chunks:
             documents.append(chunk.page_content)
-            ids.append(id_prefix + "_" + str(i))
+            ids.append(f"{id_prefix}_{i}")  # Consistent f-string usage
             metadata.append(chunk.metadata)
             i += 1
 
@@ -52,7 +53,9 @@ def process_markdown_documents(
             parent_chain_docs = get_ancestor_chain(element_id, elements_by_id)
 
             documents.append(chunk.page_content)
-            ids.append(f"ID_{i}")
+            # Use a hash of id_prefix and element_id for uniqueness
+            unique_element_id = hashlib.sha256(f"{id_prefix}_{element_id}".encode()).hexdigest()[:20]
+            ids.append(unique_element_id)
 
             temp_metadata = {}
             for key, value in chunk.metadata.items():

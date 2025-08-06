@@ -10,11 +10,11 @@ def check_fabric_installed(command: str = "fabric") -> bool:
     return shutil.which(command) is not None
 
 
-def extract_wisdom(content: str, fabric_command: str = "fabric") -> str:
+def extract_wisdom(content: str, fabric_command: str = "fabric", fabric_pattern: str = "extract_wisdom") -> str:
     try:
         # Echo content to Fabric through stdin
         result = subprocess.run(
-            [fabric_command, "-p", "extract_wisdom"], input=content, capture_output=True, text=True
+            [fabric_command, "-p", fabric_pattern], input=content, capture_output=True, text=True
         )
 
         if result.returncode == 0 and result.stdout:

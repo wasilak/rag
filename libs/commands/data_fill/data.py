@@ -73,7 +73,7 @@ def process_source_path(
         wisdom = ""
         if args.extract_wisdom and fabric_installed:
             logger.debug("Extracting wisdom with Fabric")
-            wisdom = extract_wisdom(doc.page_content, args.fabric_command)
+            wisdom = extract_wisdom(doc.page_content, args.fabric_command, args.fabric_pattern)
             logger.info("Wisdom extracted successfully")
 
         doc = format_content(doc, wisdom)
