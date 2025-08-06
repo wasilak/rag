@@ -199,3 +199,11 @@ def format_content(
     doc.page_content = new_content
 
     return doc
+
+
+def parse_source_with_title(source_path: str):
+    """Split source_path on '||' to extract (source, title)."""
+    if '||' in source_path:
+        source, title = source_path.split('||', 1)
+        return source.strip(), title.strip()
+    return source_path.strip(), None

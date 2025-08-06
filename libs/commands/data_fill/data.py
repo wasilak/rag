@@ -14,7 +14,7 @@ from .openwebui import OpenWebUIUploader
 from .validation import validate_s3_bucket_name, validate_s3_bucket_path
 from .documents import load_documents
 from .collection import delete_collection, create_get_collection, insert_into_collection
-from .utils import log_data_fill_options, format_content, sanitize_filename
+from .utils import log_data_fill_options, format_content, sanitize_filename, parse_source_with_title
 from .s3 import upload_markdown_to_s3
 from .wisdom import extract_wisdom, check_fabric_installed
 
@@ -37,20 +37,19 @@ def process_data_fill(
     if args.upload_to_open_webui:
         openwebui_uploader = OpenWebUIUploader(args=args)
 
-    for source_path in args.source_path:
-
-        documents = load_documents(source_path=source_path, args=args)
-
+    for source_path_arg in args.source_path:
+        source_path, override_title = parse_source_with_title(source_path_arg)
+        documents = load_documents(source_path=source_path, args=args, override_title=override_title)
         if len(documents) == 0:
             logger.warning(f"No documents found in {source_path}. Skipping...")
             continue
-
         process_source_path(
             source_path=source_path,
             collection=collection,
             args=args,
             documents=documents,
             openwebui_uploader=openwebui_uploader,
+            override_title=override_title,
         )
 
 
@@ -59,7 +58,8 @@ def process_source_path(
         collection: Collection,
         args: argparse.Namespace,
         documents: List[Document],
-        openwebui_uploader: OpenWebUIUploader
+        openwebui_uploader: OpenWebUIUploader,
+        override_title: str = None
 ) -> None:
 
     if args.extract_wisdom:
@@ -67,7 +67,8 @@ def process_source_path(
         logger.info("Fabric command found, wisdom extraction possible")
 
     for i, doc in enumerate(documents):
-
+        if override_title:
+            doc.metadata["title"] = override_title
         doc.metadata["sanitized_title"] = sanitize_filename(doc.metadata["title"])  # Sanitized version for filenames
 
         wisdom = ""
