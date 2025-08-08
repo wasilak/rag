@@ -82,13 +82,16 @@ def sanitize_filename(title: str) -> str:
 
 
 def extract_title_from_html(content: str) -> str:
-    soup = BeautifulSoup(content, "html.parser")
-    title_tag = soup.find("title")
-    if title_tag and title_tag.get_text(strip=True):
-        return title_tag.get_text(strip=True)
-    h1_tag = soup.find("h1")
-    if h1_tag and h1_tag.get_text(strip=True):
-        return h1_tag.get_text(strip=True)
+    try:
+        soup = BeautifulSoup(content, "html.parser")
+        title_tag = soup.find("title")
+        if title_tag and title_tag.get_text(strip=True):
+            return title_tag.get_text(strip=True)
+        h1_tag = soup.find("h1")
+        if h1_tag and h1_tag.get_text(strip=True):
+            return h1_tag.get_text(strip=True)
+    except Exception as e:
+        logger.warning(f"Failed to extract title from HTML content: {e}")
     return "untitled"
 
 
@@ -96,30 +99,40 @@ def process_html_documents(
     docs: List[Document],
     clean_content: bool = False,
 ) -> List[Document]:
-    if clean_content:
-        total_original = sum(len(doc.page_content) for doc in docs)
-        cleaned_docs = []
-        for doc in docs:
-            # Medium extraction step
-            cleaned_html = medium_extract(doc.page_content)
-            cleaned_html = clean_html_content(cleaned_html)
-            cleaned_html = apply_trafilatura(cleaned_html)
+    try:
+        if clean_content:
+            total_original = sum(len(doc.page_content) for doc in docs)
+            cleaned_docs = []
+            for doc in docs:
+                try:
+                    # Medium extraction step
+                    cleaned_html = medium_extract(doc.page_content)
+                    cleaned_html = clean_html_content(cleaned_html)
+                    cleaned_html = apply_trafilatura(cleaned_html)
 
-            doc.page_content = cleaned_html
-            cleaned_docs.append(doc)
-        total_cleaned = sum(len(doc.page_content) for doc in cleaned_docs)
-        reduction_percent = (
-            ((total_original - total_cleaned) / total_original * 100)
-            if total_original > 0
-            else 0
-        )
-        logger.info(
-            f"HTML tags and UI elements removed before Markdown conversion. Content reduced from {total_original} to {total_cleaned} chars ({reduction_percent:.1f}% reduction)."
-        )
-    else:
-        logger.info(
-            "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
-        )
+                    doc.page_content = cleaned_html
+                    cleaned_docs.append(doc)
+                except Exception as e:
+                    logger.warning(f"Failed to clean document: {e}")
+                    # Keep original document if cleaning fails
+                    cleaned_docs.append(doc)
+            total_cleaned = sum(len(doc.page_content) for doc in cleaned_docs)
+            reduction_percent = (
+                ((total_original - total_cleaned) / total_original * 100)
+                if total_original > 0
+                else 0
+            )
+            logger.info(
+                f"HTML tags and UI elements removed before Markdown conversion. Content reduced from {total_original} to {total_cleaned} chars ({reduction_percent:.1f}% reduction)."
+            )
+        else:
+            logger.info(
+                "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
+            )
+            cleaned_docs = docs
+    except Exception as e:
+        logger.error(f"Failed to process HTML documents: {e}")
+        # Return original documents if processing fails
         cleaned_docs = docs
 
     return cleaned_docs
@@ -127,55 +140,68 @@ def process_html_documents(
 
 def convert_to_markdown(docs: List[Document]) -> List[Document]:
     logger.debug("Configuring Markdownify transformer")
-    md = MarkdownifyTransformer(
-        strip=[
-            "script",
-            "style",
-            "meta",
-            "link",
-            "iframe",
-            "button",
-            "input",
-            "select",
-            "textarea",
-        ],
-        remove=tags_to_remove,
-        heading_style="ATX",
-        bullets="-",
-        wrap=0,
-        preserve_images=True,
-        emphasis_mark="*",
-        strong_mark="**",
-        escape_asterisks=False,
-        code_language="",
-        default_title=True,
-        newline_style="\n",
-        keep_formatting=True,
-    )
-    return md.transform_documents(docs)
+    try:
+        md = MarkdownifyTransformer(
+            strip=[
+                "script",
+                "style",
+                "meta",
+                "link",
+                "iframe",
+                "button",
+                "input",
+                "select",
+                "textarea",
+            ],
+            remove=tags_to_remove,
+            heading_style="ATX",
+            bullets="-",
+            wrap=0,
+            preserve_images=True,
+            emphasis_mark="*",
+            strong_mark="**",
+            escape_asterisks=False,
+            code_language="",
+            default_title=True,
+            newline_style="\n",
+            keep_formatting=True,
+        )
+        return md.transform_documents(docs)
+    except Exception as e:
+        logger.error(f"Failed to convert documents to markdown: {e}")
+        # Return original documents if conversion fails
+        return docs
 
 
 def clean_html_content(raw_html: str) -> str:
-    soup = BeautifulSoup(raw_html, "html.parser")
-    # Remove unwanted tags typical for online publications
-    for tag in soup.find_all(tags_to_remove):
-        tag.decompose()
-    # Keep only main content tags if present
-    main_content = None
-    for main_tag in ["article", "main"]:
-        main_content = soup.find(main_tag)
+    try:
+        soup = BeautifulSoup(raw_html, "html.parser")
+        # Remove unwanted tags typical for online publications
+        for tag in soup.find_all(tags_to_remove):
+            tag.decompose()
+        # Keep only main content tags if present
+        main_content = None
+        for main_tag in ["article", "main"]:
+            main_content = soup.find(main_tag)
+            if main_content:
+                break
         if main_content:
-            break
-    if main_content:
-        return str(main_content)
-    return str(soup)
+            return str(main_content)
+        return str(soup)
+    except Exception as e:
+        logger.warning(f"Failed to clean HTML content: {e}")
+        # Return original content if cleaning fails
+        return raw_html
 
 
 def apply_trafilatura(raw_html: str) -> str:
     """Extract main readable content from HTML using trafilatura. Fallback to original HTML if extraction fails."""
-    extracted = trafilatura.extract(raw_html, include_comments=False, include_tables=True, include_formatting=True)
-    if extracted and extracted.strip():
-        return extracted
+    try:
+        extracted = trafilatura.extract(raw_html, include_comments=False, include_tables=True, include_formatting=True)
+        if extracted and extracted.strip():
+            return extracted
+    except Exception as e:
+        logger.warning(f"Failed to extract content with Trafilatura: {e}")
     # Fallback: return original HTML (or could return empty string)
     return raw_html
 
@@ -249,54 +275,59 @@ def medium_extract(raw_html: str) -> str:
     If the HTML contains a Medium window.__APOLLO_STATE__ script, extract article content and replace <body> with <body><article>...</article></body>.
     Otherwise, return the original HTML.
     """
-    soup = BeautifulSoup(raw_html, "html.parser")
-    script_tag = None
-    for tag in soup.find_all("script"):
-        if tag.string and "window.__APOLLO_STATE__" in tag.string:
-            script_tag = tag
-            break
-    if not script_tag:
-        return raw_html
-
     try:
-        script_content = script_tag.string
-        json_start = script_content.find("{")
-        json_data = json.loads(script_content[json_start:])
-    except Exception:
-        return raw_html
+        soup = BeautifulSoup(raw_html, "html.parser")
+        script_tag = None
+        for tag in soup.find_all("script"):
+            if tag.string and "window.__APOLLO_STATE__" in tag.string:
+                script_tag = tag
+                break
+        if not script_tag:
+            return raw_html
 
-    post_key = next((k for k in json_data if k.startswith("Post:")), None)
-    if not post_key:
-        return raw_html
+        try:
+            script_content = script_tag.string
+            json_start = script_content.find("{")
+            json_data = json.loads(script_content[json_start:])
+        except Exception:
+            return raw_html
 
-    post = json_data[post_key]
-    paragraphs = post.get('content({"postMeteringOptions":{"referrer":""}})', {}).get("bodyModel", {}).get("paragraphs", [])
-    if not paragraphs:
-        return raw_html
+        post_key = next((k for k in json_data if k.startswith("Post:")), None)
+        if not post_key:
+            return raw_html
 
-    article_html = ""
-    for para_ref in paragraphs:
-        para = json_data.get(para_ref["__ref"])
-        if not para:
-            continue
-        t = para.get("type")
-        text = para.get("text", "")
-        if t == "H3":
-            article_html += f"<h3>{text}</h3>\n"
-        elif t == "P":
-            article_html += f"<p>{text}</p>\n"
-        elif t == "PRE":
-            article_html += f"<pre>{text}</pre>\n"
-        elif t == "ULI":
-            article_html += f"<li>{text}</li>\n"
-        elif t == "BQ":
-            article_html += f"<blockquote>{text}</blockquote>\n"
-    new_body = soup.new_tag("body")
-    article_tag = soup.new_tag("article")
-    article_tag.append(BeautifulSoup(article_html, "html.parser"))
-    new_body.append(article_tag)
-    if soup.body:
-        soup.body.replace_with(new_body)
-    else:
-        soup.append(new_body)
-    return str(soup)
+        post = json_data[post_key]
+        paragraphs = post.get('content({"postMeteringOptions":{"referrer":""}})', {}).get("bodyModel", {}).get("paragraphs", [])
+        if not paragraphs:
+            return raw_html
+
+        article_html = ""
+        for para_ref in paragraphs:
+            para = json_data.get(para_ref["__ref"])
+            if not para:
+                continue
+            t = para.get("type")
+            text = para.get("text", "")
+            if t == "H3":
+                article_html += f"<h3>{text}</h3>\n"
+            elif t == "P":
+                article_html += f"<p>{text}</p>\n"
+            elif t == "PRE":
+                article_html += f"<pre>{text}</pre>\n"
+            elif t == "ULI":
+                article_html += f"<li>{text}</li>\n"
+            elif t == "BQ":
+                article_html += f"<blockquote>{text}</blockquote>\n"
+        new_body = soup.new_tag("body")
+        article_tag = soup.new_tag("article")
+        article_tag.append(BeautifulSoup(article_html, "html.parser"))
+        new_body.append(article_tag)
+        if soup.body:
+            soup.body.replace_with(new_body)
+        else:
+            soup.append(new_body)
+        return str(soup)
+    except Exception as e:
+        logger.warning(f"Failed to extract Medium content: {e}")
+        # Return original HTML if extraction fails
+        return raw_html
