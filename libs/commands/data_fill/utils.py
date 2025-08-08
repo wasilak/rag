@@ -109,6 +109,8 @@ def process_html_documents(
                     cleaned_html = medium_extract(doc.page_content)
                     cleaned_html = clean_html_content(cleaned_html)
                     cleaned_html = apply_trafilatura(cleaned_html)
+                    # Remove CSS code blocks from text content
+                    cleaned_html = remove_css_code_blocks(cleaned_html)
 
                     doc.page_content = cleaned_html
                     cleaned_docs.append(doc)
@@ -179,6 +181,19 @@ def clean_html_content(raw_html: str) -> str:
         # Remove unwanted tags typical for online publications
         for tag in soup.find_all(tags_to_remove):
             tag.decompose()
+
+        # Remove inline styles and other attributes that often contain formatting artifacts
+        for tag in soup.find_all():
+            # Remove style attributes
+            if tag.has_attr('style'):
+                del tag['style']
+            # Remove class attributes that often contain CSS classes
+            if tag.has_attr('class'):
+                del tag['class']
+            # Remove other formatting attributes
+            if tag.has_attr('id'):
+                del tag['id']
+
         # Keep only main content tags if present
         main_content = None
         for main_tag in ["article", "main"]:
@@ -331,3 +346,42 @@ def medium_extract(raw_html: str) -> str:
         logger.warning(f"Failed to extract Medium content: {e}")
         # Return original HTML if extraction fails
         return raw_html
+
+
+def remove_css_code_blocks(text: str) -> str:
+    """
+    Remove CSS code blocks and other unwanted patterns from text content.
+    This handles cases where CSS styles and XML declarations appear as text content.
+    """
+    try:
+        # Remove XML declarations (full pattern)
+        xml_pattern = r'<\?xml version="[^"]*"\s*encoding="[^"]*"\?>'
+        text = re.sub(xml_pattern, '', text, flags=re.IGNORECASE)
+
+        # Remove partial XML declaration patterns that might appear in content
+        partial_xml_pattern = r'xml version="[^"]*"\s*encoding="[^"]*"\??'
+        text = re.sub(partial_xml_pattern, '', text, flags=re.IGNORECASE)
+
+        # Remove CSS selector patterns like "tag { property: value; }"
+        # This pattern matches CSS rules that might appear in text content
+        css_pattern = r'[a-zA-Z0-9\-_.*#\[\]="\']+ *\{[^}]*\}'
+        text = re.sub(css_pattern, '', text)
+
+        # Remove CSS-like patterns that might appear in text content
+        # This pattern matches common CSS property declarations
+        css_property_pattern = r'[a-zA-Z\-]+ *: *[^;]*;'
+        text = re.sub(css_property_pattern, '', text)
+
+        # Remove HTML comments that might contain unwanted content
+        html_comment_pattern = r'<!--.*?-->'
+        text = re.sub(html_comment_pattern, '', text, flags=re.DOTALL)
+
+        # Clean up extra whitespace that might result from removals
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Remove excessive blank lines
+        text = re.sub(r'^\s*\n', '', text, flags=re.MULTILINE)  # Remove lines with only whitespace
+
+        return text
+    except Exception as e:
+        logger.warning(f"Failed to remove CSS code blocks: {e}")
+        # Return original text if cleaning fails
+        return text

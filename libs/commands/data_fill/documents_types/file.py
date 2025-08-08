@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from typing import List
 from langchain_community.document_loaders import UnstructuredMarkdownLoader
 from ..validation import validate_path, validate_file, validate_directory, validate_is_epub
-from ..utils import convert_to_markdown as convert_to_markdown_func, medium_extract, process_html_documents, extract_title_from_html, apply_trafilatura, clean_html_content
+from ..utils import convert_to_markdown as convert_to_markdown_func, medium_extract, process_html_documents, extract_title_from_html, apply_trafilatura, clean_html_content, remove_css_code_blocks
 from langchain_core.documents import Document as LangDocument
 import ebooklib
 from ebooklib import epub
@@ -131,9 +131,20 @@ def prepare_epub_documents(file_path: str) -> List[Document]:
             logger.warning(f"Failed to decode document content: {e}")
             continue
 
-    # Combine all content and convert to markdown
+    # Combine all content and clean CSS code blocks
     combined_content = "\n\n".join(docs_raw)
-    docs = convert_to_markdown_func([LangDocument(page_content=combined_content, metadata=epub_metadata)])
+    # Apply gentle cleaning focused on CSS code blocks
+    combined_content = medium_extract(combined_content)
+    combined_content = clean_html_content(combined_content)
+    # Apply CSS code block removal without aggressive content extraction
+    docs = [LangDocument(page_content=combined_content, metadata=epub_metadata)]
+    # Apply gentle cleaning with CSS code block removal
+    cleaned_content = medium_extract(combined_content)
+    cleaned_content = clean_html_content(cleaned_content)
+    # Apply CSS code block removal directly since clean_content=False doesn't do it
+    cleaned_content = remove_css_code_blocks(cleaned_content)
+    docs = [LangDocument(page_content=cleaned_content, metadata=epub_metadata)]
+    docs = convert_to_markdown_func(docs)
 
     # Create Document objects directly instead of using temporary files
     documents = []
