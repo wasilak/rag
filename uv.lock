@@ -541,6 +541,19 @@ wheels = [
 ]
 
 [[package]]
+name = "ebooklib"
+version = "0.19"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/2a/0e7c1bdb83211043085f11c630ad7d7839dae56fd043188b59df7c1d0f69/ebooklib-0.19.tar.gz", hash = "sha256:07e9b4db0a30c73623b14e23b315634a450d2c13f23d1dba4b457a6ca16a58be", size = 116311, upload-time = "2025-05-02T13:17:58.607Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/59/e63fd0b3410d2ab7a8971b070f40390f1fbeb3c7a85849718c8480313cbf/ebooklib-0.19-py3-none-any.whl", hash = "sha256:a790e280e1d5ef105e350e34cc88b83c9c987fa6bab8a63a7543410c313cfa31", size = 39214, upload-time = "2025-05-02T13:17:57.332Z" },
+]
+
+[[package]]
 name = "emoji"
 version = "2.14.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2731,6 +2744,7 @@ dependencies = [
     { name = "chromadb" },
     { name = "colorlog" },
     { name = "dotenv" },
+    { name = "ebooklib" },
     { name = "firecrawl-py" },
     { name = "flask" },
     { name = "flask-cors" },
@@ -2759,6 +2773,7 @@ requires-dist = [
     { name = "chromadb", specifier = ">=0.5.23" },
     { name = "colorlog", specifier = ">=6.8.2" },
     { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "ebooklib", specifier = ">=0.19" },
     { name = "firecrawl-py", specifier = ">=2.16.1" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "flask-cors", specifier = ">=5.0.0" },

@@ -11,14 +11,6 @@ logger = logging.getLogger("RAG")
 
 
 def validate_url(url: str) -> bool:
-    """Validate if string is a valid URL.
-
-    Args:
-        url: String to validate
-
-    Returns:
-        True if URL is valid, False otherwise
-    """
     if not isinstance(url, str):
         return False
     try:
@@ -29,14 +21,6 @@ def validate_url(url: str) -> bool:
 
 
 def validate_path(path: Union[str, Path]) -> bool:
-    """Validate if path exists.
-
-    Args:
-        path: Path to validate (string or Path object)
-
-    Returns:
-        True if path exists, False otherwise
-    """
     try:
         return Path(path).exists()
     except Exception as e:
@@ -45,14 +29,6 @@ def validate_path(path: Union[str, Path]) -> bool:
 
 
 def validate_file(path: Union[str, Path]) -> bool:
-    """Validate if path is an existing file.
-
-    Args:
-        path: Path to validate (string or Path object)
-
-    Returns:
-        True if path is a file and exists, False otherwise
-    """
     try:
         return Path(path).is_file()
     except Exception as e:
@@ -61,14 +37,6 @@ def validate_file(path: Union[str, Path]) -> bool:
 
 
 def validate_directory(path: Union[str, Path]) -> bool:
-    """Validate if path is an existing directory.
-
-    Args:
-        path: Path to validate (string or Path object)
-
-    Returns:
-        True if path is a directory and exists, False otherwise
-    """
     try:
         return Path(path).is_dir()
     except Exception as e:
@@ -77,16 +45,6 @@ def validate_directory(path: Union[str, Path]) -> bool:
 
 
 def validate_s3_bucket_name(bucket: str) -> bool:
-    """Validate S3 bucket name according to AWS rules.
-
-    Args:
-        bucket: Bucket name to validate
-
-    Returns:
-        True if bucket name is valid, False otherwise
-
-    Rules from: https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
-    """
     if not bucket:
         return False
 
@@ -122,14 +80,6 @@ def validate_s3_bucket_name(bucket: str) -> bool:
 
 
 def validate_s3_bucket_path(path: str) -> bool:
-    """Validate S3 bucket path.
-
-    Args:
-        path: Bucket path to validate
-
-    Returns:
-        True if bucket path is valid, False otherwise
-    """
     if not path:
         return True  # Empty path is valid
 
@@ -143,3 +93,7 @@ def validate_s3_bucket_path(path: str) -> bool:
     except Exception as e:
         logger.debug(f"S3 bucket path validation failed: {e}")
         return False
+
+
+def validate_is_epub(file_path: str) -> bool:
+    return file_path.lower().endswith('.epub')

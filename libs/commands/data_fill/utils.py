@@ -93,7 +93,8 @@ def extract_title_from_html(content: str) -> str:
 
 
 def process_html_documents(
-    docs: List[Document], clean_content: bool = False
+    docs: List[Document],
+    clean_content: bool = False,
 ) -> List[Document]:
     if clean_content:
         total_original = sum(len(doc.page_content) for doc in docs)
