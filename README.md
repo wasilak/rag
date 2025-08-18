@@ -93,11 +93,11 @@ docker run -it --rm rag chat
 # Add local markdown files
 python main.py data-fill examples/markdown.md
 
-# Add web content
-python main.py data-fill https://example.com/docs --source-type url
+# Add web content (URLs are auto-detected, no --source-type needed)
+python main.py data-fill https://example.com/docs
 
 # Add web content with cleaning (removes ads, navigation, etc.)
-python main.py data-fill https://example.com/docs --source-type url --clean-content
+python main.py data-fill https://example.com/docs --clean-content
 
 # Configure chunk size and overlap for better context
 python main.py data-fill docs/*.md --chunk-size 800 --chunk-overlap 200
@@ -106,7 +106,10 @@ python main.py data-fill docs/*.md --chunk-size 800 --chunk-overlap 200
 python main.py data-fill docs/*.md --extract-wisdom
 
 # Upload processed markdown to S3
-python main.py data-fill docs/*.md --bucket-name my-docs --bucket-path rag/
+python main.py data-fill docs/*.md --upload-to-s3 --bucket-name my-docs --bucket-path rag/
+
+# Upload to Open WebUI knowledge base
+python main.py data-fill docs/*.md --upload-to-open-webui --open-webui-api-key your-key
 ```
 
 2️⃣ **Search your documents:**
@@ -181,7 +184,6 @@ Ingest documents into your vector database:
 python main.py data-fill [OPTIONS] SOURCE_PATH [SOURCE_PATH...]
 
 Options:
-  --source-type [file|url]     Type of source data (default: file)
   --mode [single|elements]     Processing mode (default: single)
   --cleanup                    Clean collection before filling
   --collection NAME            Collection name (default: RAG)
@@ -197,12 +199,19 @@ Document Processing Options:
   --clean-content             Clean document content by removing ads, navigation, etc.
   --extract-wisdom            Extract wisdom using Fabric AI
   --fabric-command CMD        Fabric command name (default: fabric)
+  --fabric-pattern PATTERN    Fabric pattern for wisdom extraction (default: create_micro_summary)
   --chunk-size SIZE          Size of text chunks (default: 600)
   --chunk-overlap SIZE       Overlap between chunks (default: 200)
+  --convert-to-markdown       Convert HTML files to Markdown
 
-S3 Storage Options:
+Storage Options:
+  --upload-to-s3              Upload processed markdown to S3
   --bucket-name NAME          S3 bucket name for markdown storage
   --bucket-path PATH         S3 bucket path prefix
+  --upload-to-open-webui      Upload to Open WebUI knowledge base
+  --open-webui-url URL        Open WebUI API base URL (default: http://localhost:3000)
+  --open-webui-api-key KEY    Open WebUI API key
+  --open-webui-knowledge-id ID Open WebUI knowledge collection ID (optional)
 ```
 
 ### 🔍 Search
@@ -294,6 +303,17 @@ cd web && yarn install && yarn build
 python main.py web
 ```
 
+### 🎮 List Models
+
+List available models for each LLM provider:
+
+```bash
+# List available models
+python main.py list-models ollama
+python main.py list-models openai  
+python main.py list-models gemini
+```
+
 ## 🔧 Configuration
 
 Configure via environment variables:
@@ -301,7 +321,7 @@ Configure via environment variables:
 ```bash
 # Core settings
 export RAG_COLLECTION="my-docs"
-export RAG_DB_PATH="./vectordb"
+export RAG_CHROMADB_PATH="./vectordb"  # Updated from RAG_DB_PATH
 export RAG_LOG_LEVEL="INFO"
 
 # ChromaDB Server settings (for HTTP client)
@@ -365,7 +385,7 @@ flowchart TD
 python main.py data-fill docs/guide.md --mode elements
 
 # Web documentation with cleaning
-python main.py data-fill https://docs.example.com --source-type url --enable-cleaning
+python main.py data-fill https://docs.example.com --clean-content
 
 # Multiple files with collection reset
 python main.py data-fill *.md docs/*.md --cleanup --collection "project-docs"
@@ -431,6 +451,13 @@ This project stands on the shoulders of giants! Massive thanks to these incredib
 - **[Flask](https://flask.palletsprojects.com/)** - Lightweight Python web framework
 - **[Flask-SocketIO](https://flask-socketio.readthedocs.io/)** - WebSocket support for Flask
 - **[Flask-CORS](https://flask-cors.readthedocs.io/)** - Cross-Origin Resource Sharing support
+
+### 🔧 **Additional Features**
+
+- **[Firecrawl](https://firecrawl.dev/)** - Advanced web scraping for better content extraction
+- **[Open WebUI](https://openwebui.com/)** - Integration with Open WebUI knowledge bases
+- **[KeyBERT](https://maartengr.github.io/KeyBERT/)** - Keyword extraction for enhanced search
+- **Model validation system** - Automatic model validation and fallback to ensure reliability
 
 ## 🤝 Contributing
 

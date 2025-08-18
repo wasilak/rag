@@ -2,7 +2,7 @@ import re
 import boto3
 
 
-def upload_markdown_to_s3(
+def upload_to_s3(
     markdown_content: str, title: str, folder: str, bucket_name: str
 ) -> None:
     """

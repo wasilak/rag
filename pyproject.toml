@@ -30,4 +30,6 @@ dependencies = [
   "keybert>=0.9.0",
   "trafilatura>=2.0.0",
   "ebooklib>=0.19",
+  "pdfplumber>=0.11.7",
+  "pypdf>=5.9.0",
 ]

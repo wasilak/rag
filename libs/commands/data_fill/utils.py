@@ -1,4 +1,4 @@
-import argparse
+import os
 import re
 import logging
 from bs4 import BeautifulSoup
@@ -49,24 +49,6 @@ tags_to_remove = [
     "toolbar",
     "widget",
 ]
-
-
-def log_data_fill_options(args: argparse.Namespace) -> None:
-    """Log data fill options for user feedback."""
-    if args.cleanup:
-        logger.info("Cleanup enabled: collection will be deleted before filling.")
-    if args.clean_content:
-        logger.info(
-            "Document cleaning enabled: HTML tags and UI elements will be removed before Markdown conversion."
-        )
-    else:
-        logger.info(
-            "Document cleaning disabled: raw HTML will be converted to Markdown without pre-cleaning."
-        )
-    if args.extract_wisdom:
-        logger.info(
-            f"Wisdom extraction enabled: {args.fabric_command} will be used to extract key insights."
-        )
 
 
 def sanitize_filename(title: str) -> str:
@@ -385,3 +367,11 @@ def remove_css_code_blocks(text: str) -> str:
         logger.warning(f"Failed to remove CSS code blocks: {e}")
         # Return original text if cleaning fails
         return text
+
+
+def get_title_from_file_name(file_path: str) -> str:
+    # Get the file name without extension
+    file_name = os.path.basename(file_path)
+    # Remove the extension
+    file_name = os.path.splitext(file_name)[0]
+    return file_name

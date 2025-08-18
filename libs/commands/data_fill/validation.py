@@ -20,14 +20,6 @@ def validate_url(url: str) -> bool:
         return False
 
 
-def validate_path(path: Union[str, Path]) -> bool:
-    try:
-        return Path(path).exists()
-    except Exception as e:
-        logger.debug(f"Path validation failed: {e}")
-        return False
-
-
 def validate_file(path: Union[str, Path]) -> bool:
     try:
         return Path(path).is_file()
@@ -97,3 +89,7 @@ def validate_s3_bucket_path(path: str) -> bool:
 
 def validate_is_epub(file_path: str) -> bool:
     return file_path.lower().endswith('.epub')
+
+
+def validate_is_pdf(file_path: str) -> bool:
+    return file_path.lower().endswith('.pdf')

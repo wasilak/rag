@@ -1,10 +1,12 @@
+import argparse
+from pypdf import PdfReader
 import logging
 import os
 from langchain_core.documents import Document
 from typing import List
 from langchain_community.document_loaders import UnstructuredMarkdownLoader
-from ..validation import validate_path, validate_file, validate_directory, validate_is_epub
-from ..utils import convert_to_markdown as convert_to_markdown_func, medium_extract, process_html_documents, extract_title_from_html, apply_trafilatura, clean_html_content, remove_css_code_blocks
+from ..validation import validate_is_pdf, validate_file, validate_directory, validate_is_epub
+from ..utils import convert_to_markdown as convert_to_markdown_func, get_title_from_file_name, medium_extract, process_html_documents, extract_title_from_html, apply_trafilatura, clean_html_content, remove_css_code_blocks
 from langchain_core.documents import Document as LangDocument
 import ebooklib
 from ebooklib import epub
@@ -12,37 +14,43 @@ from ebooklib import epub
 logger = logging.getLogger("RAG")
 
 
-def load_file_documents(source_path: str, mode: str, should_convert_to_markdown: bool = False) -> List[Document]:
+def load_file_documents(source_path: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = None) -> List[Document]:
     try:
         full_path = os.path.abspath(source_path)
     except Exception as e:
         logger.error(f"Failed to resolve absolute path for {source_path}: {e}")
         return []
 
-    if not validate_path(full_path):
-        logger.error(f"Path does not exist: {full_path}")
-        return []
+    full_path = str(full_path).replace('\\', '')
 
     if validate_file(full_path):
-        return load_file_document(full_path, mode, should_convert_to_markdown=should_convert_to_markdown)
+        return load_file_document(full_path, args, should_convert_to_markdown=should_convert_to_markdown, override_title=override_title)
     elif validate_directory(full_path):
-        return load_directory_documents(full_path, mode, should_convert_to_markdown=should_convert_to_markdown)
+        return load_directory_documents(full_path, args, should_convert_to_markdown=should_convert_to_markdown, override_title=override_title)
     else:
         logger.error(f"Path {full_path} is not a valid file or directory")
         return []
 
 
-def load_file_document(file_path: str, mode: str, should_convert_to_markdown: bool = False) -> List[Document]:
+def load_file_document(file_path: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = None) -> List[Document]:
     try:
         is_epub = validate_is_epub(file_path)
     except Exception as e:
         logger.error(f"Failed to validate file type for {file_path}: {e}")
         return []
 
-    logger.debug(f"Loading file {file_path} with mode {mode} (should_convert_to_markdown={should_convert_to_markdown})")
+    try:
+        is_pdf = validate_is_pdf(file_path)
+    except Exception as e:
+        logger.error(f"Failed to validate file type for {file_path}: {e}")
+        return []
+
+    logger.debug(f"Loading file {file_path} with mode {args.mode} (should_convert_to_markdown={should_convert_to_markdown})")
 
     if is_epub:
-        return prepare_epub_documents(file_path)
+        return prepare_epub_documents(file_path, args=args, override_title=override_title)
+    elif is_pdf:
+        return prepare_pdf_documents(file_path, args=args, override_title=override_title)
     else:
         if should_convert_to_markdown:
             try:
@@ -74,7 +82,7 @@ def load_file_document(file_path: str, mode: str, should_convert_to_markdown: bo
             for doc in documents:
                 doc.metadata["source"] = file_path
         else:
-            loader = UnstructuredMarkdownLoader(file_path, mode=mode)
+            loader = UnstructuredMarkdownLoader(file_path, mode=args.mode)
             documents = loader.load()
             for doc in documents:
                 doc.metadata["source"] = file_path
@@ -91,7 +99,7 @@ def load_file_document(file_path: str, mode: str, should_convert_to_markdown: bo
     return documents
 
 
-def load_directory_documents(directory: str, mode: str, should_convert_to_markdown: bool = False) -> List[Document]:
+def load_directory_documents(directory: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = None) -> List[Document]:
     logger.debug(f"Processing directory {directory} recursively")
     documents = []
     try:
@@ -99,7 +107,7 @@ def load_directory_documents(directory: str, mode: str, should_convert_to_markdo
             markdown_files = [f for f in files if f.lower().endswith((".md", ".markdown"))]
             for file in markdown_files:
                 file_path = os.path.join(root, file)
-                docs = load_file_document(file_path, mode, should_convert_to_markdown=should_convert_to_markdown)
+                docs = load_file_document(file_path, args, should_convert_to_markdown=should_convert_to_markdown, override_title=override_title)
                 documents.extend(docs)
     except Exception as e:
         logger.error(f"Failed to process directory {directory}: {e}")
@@ -110,7 +118,7 @@ def load_directory_documents(directory: str, mode: str, should_convert_to_markdo
     return documents
 
 
-def prepare_epub_documents(file_path: str) -> List[Document]:
+def prepare_epub_documents(file_path: str, args: argparse.Namespace, override_title: str = None) -> List[Document]:
     try:
         book = epub.read_epub(file_path)
     except Exception as e:
@@ -157,9 +165,55 @@ def prepare_epub_documents(file_path: str) -> List[Document]:
     for doc in documents:
         doc.metadata.update(epub_metadata)
         doc.metadata["source"] = file_path
-        # Extract and store title from metadata
-        title = doc.metadata.get("title", extract_title_from_html(doc.page_content))
-        doc.metadata["title"] = title
+
+        if override_title:
+            doc.metadata["title"] = override_title
+
+        # Add title to metadata if it's missing
+        if "title" not in doc.metadata:
+            doc.metadata["title"] = get_title_from_file_name(file_path)
 
     logger.debug(f"Loaded {len(documents)} documents from EPUB file {file_path}")
     return documents
+
+
+def prepare_pdf_documents(file_path: str, args: argparse.Namespace, override_title: str = None) -> List[Document]:
+    try:
+        reader = PdfReader(file_path)
+        raw_text = ""
+        number_of_pages = len(reader.pages)
+
+        logger.debug(f"Processing PDF file: {file_path} with {number_of_pages} pages")
+
+        for page in reader.pages:
+            raw_text += page.extract_text()
+            # Remove any layout or formatting characters
+            raw_text = raw_text.replace("\n", " ").replace("\t", " ")
+
+        if not raw_text:
+            logger.warning("No text extracted from PDF file")
+            return []
+
+        # Create a single Document object with the raw text
+        doc = LangDocument(page_content=raw_text, metadata={})
+
+        # Extract metadata from PDF file
+        pdf_metadata = {key[1:]: value for key, value in reader.metadata.items() if key.startswith('/')}
+
+        # normalize values as strings
+        pdf_metadata = {key: str(value) for key, value in pdf_metadata.items()}
+
+        doc.metadata.update(pdf_metadata)
+        doc.metadata["source"] = file_path
+
+        if override_title:
+            doc.metadata["title"] = override_title
+
+        # Add title to metadata if it's missing
+        if "title" not in doc.metadata:
+            doc.metadata["title"] = get_title_from_file_name(file_path)
+
+        return [doc]
+    except Exception as e:
+        logger.error(f"Failed to read PDF file {file_path}", e)
+        return []

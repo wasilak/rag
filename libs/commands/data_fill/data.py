@@ -14,8 +14,8 @@ from .openwebui import OpenWebUIUploader
 from .validation import validate_s3_bucket_name, validate_s3_bucket_path
 from .documents import load_documents
 from .collection import delete_collection, create_get_collection, insert_into_collection
-from .utils import log_data_fill_options, format_content, sanitize_filename, parse_source_with_title, add_keybert_tags_to_doc
-from .s3 import upload_markdown_to_s3
+from .utils import format_content, sanitize_filename, parse_source_with_title, add_keybert_tags_to_doc
+from .s3 import upload_to_s3
 from .wisdom import extract_wisdom, check_fabric_installed
 
 logger = logging.getLogger("RAG")
@@ -25,8 +25,6 @@ def process_data_fill(
     client: Optional[ClientAPI],
     args: argparse.Namespace,
 ) -> None:
-    log_data_fill_options(args=args)
-
     collection = None
     if client is not None and args.cleanup:
         delete_collection(client, args.collection)
@@ -119,7 +117,7 @@ def process_source_path(
             )
 
             doc.metadata["file_path"] = file_path
-            upload_markdown_to_s3(doc.page_content, doc.metadata["sanitized_title"], args.bucket_path, args.bucket_name)
+            upload_to_s3(doc.page_content, doc.metadata["sanitized_title"], args.bucket_path, args.bucket_name)
 
             logger.debug("S3 upload completed")
 
