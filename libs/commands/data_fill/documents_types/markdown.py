@@ -1,11 +1,16 @@
 import logging
+import argparse
 from langchain_core.documents import Document
 from typing import List, Optional
+import hashlib
+
 from chromadb.api.types import (
     Metadata,
     OneOrMany,
 )
-import hashlib
+from langchain_community.document_loaders import UnstructuredMarkdownLoader
+
+from ..utils import convert_to_markdown, get_title_from_file_name, medium_extract, process_html_documents, extract_title_from_html, apply_trafilatura, clean_html_content
 
 logger = logging.getLogger("RAG")
 
@@ -77,3 +82,59 @@ def process_markdown_documents(
             metadata.append(temp_metadata)
 
     return documents, metadata, ids
+
+
+def prepare_markdown_documents(
+    file_path: str,
+    args: argparse.Namespace,
+    should_convert_to_markdown: bool,
+    override_title: str | None
+) -> List[Document]:
+
+    if should_convert_to_markdown:
+        try:
+            # Read file as text (assume HTML or similar)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw_content = f.read()
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            return []
+
+        # Medium extraction step
+        raw_content = medium_extract(raw_content)
+        raw_content = clean_html_content(raw_content)
+        raw_content = apply_trafilatura(raw_content)
+
+        # Clean and convert to markdown using existing utils
+        docs = [Document(page_content=raw_content, metadata={})]
+        docs = process_html_documents(docs, clean_content=True)
+        docs = convert_to_markdown(docs)
+
+        # Create Document objects directly instead of using temporary files
+        documents = []
+        for doc in docs:
+            # Create Document object directly
+            langchain_doc = Document(page_content=doc.page_content, metadata={})
+            documents.append(langchain_doc)
+
+        # Set original file_path as source for all loaded docs
+        for doc in documents:
+            doc.metadata["source"] = file_path
+    else:
+        loader = UnstructuredMarkdownLoader(file_path, mode=args.mode)
+        documents = loader.load()
+        for doc in documents:
+            doc.metadata["source"] = file_path
+
+    for doc in documents:
+        # Extract and store title from metadata
+        if override_title:
+            doc.metadata["title"] = override_title
+
+        # Add title to metadata if it's missing
+        if "title" not in doc.metadata:
+            doc.metadata["title"] = get_title_from_file_name(file_path)
+
+        doc.metadata["title"] = doc.metadata.get("title", extract_title_from_html(doc.page_content))
+
+    return documents
