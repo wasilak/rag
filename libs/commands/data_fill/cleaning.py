@@ -1,3 +1,4 @@
+import argparse
 import logging
 from typing import List, Optional
 from langchain_core.documents import Document
@@ -12,6 +13,7 @@ class DocumentCleaner:
 
     def __init__(
         self,
+        args: argparse.Namespace,
         llm_provider: str,
         model: str,
         embedding_ollama_host: str,
@@ -29,7 +31,7 @@ class DocumentCleaner:
         self.model = get_best_model(
             llm_provider, ollama_host, ollama_port, model, "chat"
         )
-        self.client = create_openai_client(llm_provider, ollama_host, ollama_port)
+        self.client = create_openai_client(args)
         self.embedding_ollama_host = embedding_ollama_host
         self.embedding_ollama_port = embedding_ollama_port
         self.ollama_host = ollama_host
@@ -292,6 +294,7 @@ Edit config.json...
 
 
 def create_document_cleaner(
+    args: argparse.Namespace,
     llm_provider: str,
     model: str,
     embedding_ollama_host: str,
@@ -320,12 +323,14 @@ def create_document_cleaner(
         raise ValueError("Model name cannot be empty")
 
     return DocumentCleaner(
+        args,
         llm_provider, model.strip(), embedding_ollama_host, embedding_ollama_port,
         ollama_host, ollama_port
     )
 
 
 def clean_documents(
+    args: argparse.Namespace,
     documents: List[Document],
     enable_cleaning: bool,
     llm_provider: str,
@@ -358,6 +363,7 @@ def clean_documents(
 
     try:
         cleaner = create_document_cleaner(
+            args,
             llm_provider, model, embedding_ollama_host, embedding_ollama_port,
             ollama_host, ollama_port
         )

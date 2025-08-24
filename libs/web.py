@@ -1,4 +1,5 @@
 import os
+import argparse
 import logging
 import webbrowser
 from typing import List, Dict, Any, Optional, Callable, TypeVar, cast, Generator
@@ -24,40 +25,28 @@ class WebChatManager:
 
     def __init__(
         self,
+        args: argparse.Namespace,
         client: ClientAPI,
-        collection_name: str,
-        llm: str,
-        model: str,
-        embedding_model: str,
-        embedding_llm: str,
-        embedding_ollama_host: str,
-        embedding_ollama_port: int,
-        ollama_host: str,
-        ollama_port: int,
-        max_history: int = 50,
-        chat_db_path: Optional[str] = None,
     ):
         self.client = client
-        self.collection_name = collection_name
-        self.llm = llm
+        self.collection_name = args.collection_name
+        self.llm = args.llm
         # Validate and get best available model
         self.model = get_best_model(
-            llm, ollama_host, ollama_port, model, "chat"
+            self.llm, args.ollama_host, args.ollama_port, args.model, "chat"
         )
-        self.embedding_model = embedding_model
-        self.embedding_llm = embedding_llm
-        self.embedding_ollama_host = embedding_ollama_host
-        self.embedding_ollama_port = embedding_ollama_port
-        self.ollama_host = ollama_host
-        self.ollama_port = ollama_port
-        self.max_history = max_history
+        self.embedding_model = args.embedding_model
+        self.embedding_llm = args.embedding_llm
+        self.embedding_ollama_host = args.embedding_ollama_host
+        self.embedding_ollama_port = args.embedding_ollama_port
+        self.ollama_host = args.ollama_host
+        self.ollama_port = args.ollama_port
+        self.max_history = args.max_history
 
-        self.llm_client = create_openai_client(self.llm, self.ollama_host, self.ollama_port)
-        self.embedding_function = set_embedding_function(
-            embedding_llm, embedding_model, embedding_ollama_host, embedding_ollama_port
-        )
+        self.llm_client = create_openai_client(args)
+        self.embedding_function = set_embedding_function(args)
         self.tokenizer = get_tokenizer_for_model(self.model)
-        self.storage = ChatStorage(chat_db_path) if chat_db_path else None
+        self.storage = ChatStorage(args.chat_db_path)
 
     def _get_session_state(self, sid: str) -> Dict[str, Any]:
         if sid not in chat_sessions:
@@ -321,25 +310,14 @@ def _configure_cors(app: Flask, cors_origins: str, port: int, host: str) -> None
 
 
 def _initialize_chat_manager(
+    args: argparse.Namespace,
     client: ClientAPI,
-    collection_name: str,
-    llm: str,
-    model: str,
-    embedding_model: str,
-    embedding_llm: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
-    ollama_host: str,
-    ollama_port: int,
-    max_history: int,
-    chat_db_path: Optional[str] = None,
 ) -> None:
     """Initialize the global chat manager"""
     global chat_manager
     chat_manager = WebChatManager(
-        client, collection_name, llm, model, embedding_model,
-        embedding_llm, embedding_ollama_host, embedding_ollama_port,
-        ollama_host, ollama_port, max_history, chat_db_path
+        args,
+        client,
     )
 
 
@@ -497,23 +475,7 @@ def setup_routes(app: Flask) -> None:  # noqa: C901
 
 def create_app(
     client: ClientAPI,
-    collection_name: str,
-    llm: str,
-    model: str,
-    embedding_model: str,
-    embedding_llm: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
-    ollama_host: str,
-    ollama_port: int,
-    port: int = 8080,
-    host: str = "127.0.0.1",
-    cors_origins: str = "",
-    secret_key: str = "rag-web-secret-key",
-    max_history: int = 50,
-    timeout: int = 300,
-    debug: bool = False,
-    chat_db_path: Optional[str] = None,
+    args: argparse.Namespace,
 ) -> Flask:  # noqa: C901
     """Create and configure Flask app"""
     import os
@@ -524,44 +486,34 @@ def create_app(
     print(f"Static folder path: {static_folder_path}")
     print(f"Static folder exists: {os.path.exists(static_folder_path)}")
     app = Flask(__name__, static_folder=static_folder_path, static_url_path="/static")
-    app.config["SECRET_KEY"] = secret_key
+    app.config["SECRET_KEY"] = args.secret_key
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # Disable caching in development
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max request size
     app.config["PROPAGATE_EXCEPTIONS"] = True
-    if debug:
+    if args.debug:
         app.config["DEBUG"] = True  # Enable Flask debug mode when requested
 
     # Configure CORS
-    _configure_cors(app, cors_origins, port, host)
+    _configure_cors(app, args.cors_origins, args.port, args.host)
 
     # Initialize SocketIO with permissive CORS for 0.0.0.0 binding
     socketio = SocketIO(
         app,
         cors_allowed_origins="*",
         async_mode='threading',
-        ping_timeout=timeout,
+        ping_timeout=args.timeout,
         ping_interval=25,
         max_http_buffer_size=16 * 1024 * 1024,  # 16MB max WebSocket message size
         always_connect=True,
-        logger=True if debug else False,  # Only enable socket logging in debug mode
-        engineio_logger=True if debug else False,  # Only enable engine logging in debug mode
+        logger=True if args.debug else False,  # Only enable socket logging in debug mode
+        engineio_logger=True if args.debug else False,  # Only enable engine logging in debug mode
         manage_session=False  # Disable session management for development
     )
 
     # Initialize chat manager
     _initialize_chat_manager(
+        args=args,
         client=client,
-        collection_name=collection_name,
-        llm=llm,
-        model=model,
-        embedding_model=embedding_model,
-        embedding_llm=embedding_llm,
-        embedding_ollama_host=embedding_ollama_host,
-        embedding_ollama_port=embedding_ollama_port,
-        ollama_host=ollama_host,
-        ollama_port=ollama_port,
-        max_history=max_history,
-        chat_db_path=chat_db_path
     )
 
     # Set up routes
@@ -662,26 +614,8 @@ def create_app(
 
 
 def process_web(
+    args: argparse.Namespace,
     client: ClientAPI,
-    collection_name: str,
-    llm: str,
-    model: str,
-    embedding_model: str,
-    embedding_llm: str,
-    embedding_ollama_host: str,
-    embedding_ollama_port: int,
-    ollama_host: str,
-    ollama_port: int,
-    host: str = "127.0.0.1",
-    port: int = 8080,
-    debug: bool = False,
-    browser: bool = False,
-    cors_origins: str = "",
-    secret_key: str = "rag-web-secret-key",
-    max_history: int = 50,
-    timeout: int = 300,
-    workers: int = 1,
-    chat_db_path: Optional[str] = None,
 ) -> None:
     """Process web command"""
     # Check if web interface is available
@@ -692,36 +626,20 @@ def process_web(
         logger.info("Web interface will not be available")
         return
 
-    logger.info(f"Starting web interface for collection '{collection_name}'")
+    logger.info(f"Starting web interface for collection '{args.collection_name}'")
 
     app = create_app(
+        args=args,
         client=client,
-        collection_name=collection_name,
-        llm=llm,
-        model=model,
-        embedding_model=embedding_model,
-        embedding_llm=embedding_llm,
-        embedding_ollama_host=embedding_ollama_host,
-        embedding_ollama_port=embedding_ollama_port,
-        ollama_host=ollama_host,
-        ollama_port=ollama_port,
-        port=port,
-        host=host,
-        cors_origins=cors_origins,
-        secret_key=secret_key,
-        max_history=max_history,
-        timeout=timeout,
-        debug=debug,
-        chat_db_path=chat_db_path
     )
 
     # Start the server
-    logger.info(f"Web interface starting at http://{host}:{port}")
+    logger.info(f"Web interface starting at http://{args.host}:{args.port}")
 
     # Open browser if requested
-    if browser:
+    if args.browser:
         # Always use localhost for browser, regardless of host binding
-        url = f"http://localhost:{port}"
+        url = f"http://localhost:{args.port}"
         logger.debug(f"Opening browser to {url}")
         webbrowser.open(url)
 
@@ -732,11 +650,11 @@ def process_web(
     if hasattr(app, 'socketio'):
         getattr(app, 'socketio').run(
             app,
-            host=host,
-            port=port,
-            debug=True if debug else False,
+            host=args.host,
+            port=args.port,
+            debug=True if args.debug else False,
             allow_unsafe_werkzeug=True,
-            log_output=True if debug else False  # Only show logs in debug mode
+            log_output=True if args.debug else False  # Only show logs in debug mode
         )
     else:
         raise RuntimeError("SocketIO not properly initialized")

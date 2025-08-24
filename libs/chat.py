@@ -230,6 +230,7 @@ class ChatApp(App):
 
     def __init__(
         self,
+        args: argparse.Namespace,
         client: ClientAPI,
         collection_name: str,
         llm: str,
@@ -253,7 +254,7 @@ class ChatApp(App):
         )
         self.embedding_model = embedding_model
         self.embedding_llm = embedding_llm
-        self.llm_client = create_openai_client(self.llm, self.ollama_host, self.ollama_port)
+        self.llm_client = create_openai_client(args)
         self.embedding_function = None
         self.conversation_history: List[Dict[str, str]] = []
         self.tokenizer = get_tokenizer_for_model(self.model)
@@ -355,17 +356,12 @@ class ChatApp(App):
             yield Button("Send", id="send-button")
         yield Footer()
 
-    def on_mount(self) -> None:
+    def on_mount(self, args: argparse.Namespace) -> None:
         """Set up the application when it starts"""
         # Set Tokyo Night theme as default
         self.theme = "tokyo-night"
 
-        self.embedding_function = set_embedding_function(
-            self.embedding_llm,
-            self.embedding_model,
-            self.embedding_ollama_host,
-            self.embedding_ollama_port,
-        )
+        self.embedding_function = set_embedding_function(args)
 
         # Set text content after mounting
         self.query_one("#status", Static).update(
@@ -702,6 +698,7 @@ def process_chat(client: ClientAPI, args: argparse.Namespace) -> None:
     logger.debug(f"Starting chat interface for collection '{args.collection}'")
 
     app = ChatApp(
+        args,
         client,
         args.collection,
         args.llm,

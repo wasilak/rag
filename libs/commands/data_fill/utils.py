@@ -1,7 +1,7 @@
 import os
 import re
 import logging
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from typing import List
 from langchain_community.document_transformers import MarkdownifyTransformer
 from langchain_core.documents import Document
@@ -150,7 +150,8 @@ def convert_to_markdown(docs: List[Document]) -> List[Document]:
             newline_style="\n",
             keep_formatting=True,
         )
-        return md.transform_documents(docs)
+        md_docs = list(md.transform_documents(docs))
+        return md_docs
     except Exception as e:
         logger.error(f"Failed to convert documents to markdown: {e}")
         # Return original documents if conversion fails
@@ -166,15 +167,17 @@ def clean_html_content(raw_html: str) -> str:
 
         # Remove inline styles and other attributes that often contain formatting artifacts
         for tag in soup.find_all():
-            # Remove style attributes
-            if tag.has_attr('style'):
-                del tag['style']
-            # Remove class attributes that often contain CSS classes
-            if tag.has_attr('class'):
-                del tag['class']
-            # Remove other formatting attributes
-            if tag.has_attr('id'):
-                del tag['id']
+
+            if isinstance(tag, Tag):
+                # Remove style attributes
+                if tag.has_attr('style'):
+                    del tag['style']
+                # Remove class attributes that often contain CSS classes
+                if tag.has_attr('class'):
+                    del tag['class']
+                # Remove other formatting attributes
+                if tag.has_attr('id'):
+                    del tag['id']
 
         # Keep only main content tags if present
         main_content = None
@@ -243,14 +246,14 @@ def parse_source_with_title(source_path: str):
     if '||' in source_path:
         source, title = source_path.split('||', 1)
         return source.strip(), title.strip()
-    return source_path.strip(), None
+    return source_path.strip(), ""
 
 
 def extract_keywords_with_keybert(text: str, top_n: int = 5) -> list:
     """Extract top_n keywords/phrases from text using KeyBERT, deduplicated and space-free."""
     model = KeyBERT()
     keywords = model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=top_n)
-    tags = [kw[0].replace(' ', '_') for kw in keywords]
+    tags = [kw[0][0].replace(' ', '_') for kw in keywords]
     seen = set()
     deduped_tags = []
     for tag in tags:
@@ -276,16 +279,21 @@ def medium_extract(raw_html: str) -> str:
         soup = BeautifulSoup(raw_html, "html.parser")
         script_tag = None
         for tag in soup.find_all("script"):
-            if tag.string and "window.__APOLLO_STATE__" in tag.string:
+            script_content = getattr(tag, 'string', None)
+            if script_content and "window.__APOLLO_STATE__" in script_content:
                 script_tag = tag
                 break
         if not script_tag:
             return raw_html
 
+        json_data = {}
+
         try:
-            script_content = script_tag.string
-            json_start = script_content.find("{")
-            json_data = json.loads(script_content[json_start:])
+            if isinstance(script_tag, Tag):
+                script_content = script_tag.string
+                if script_content:
+                    json_start = script_content.find("{")
+                    json_data = json.loads(script_content[json_start:])
         except Exception:
             return raw_html
 

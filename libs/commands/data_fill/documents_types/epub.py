@@ -10,7 +10,7 @@ from ..utils import get_title_from_file_name
 logger = logging.getLogger("RAG")
 
 
-def prepare_epub_documents(file_path: str, args: argparse.Namespace, override_title: str = None) -> List[Document]:
+def prepare_epub_documents(file_path: str, args: argparse.Namespace, override_title: str = "") -> List[Document]:
     """
     Parse an EPUB file and extract its content and metadata.
 

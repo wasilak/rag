@@ -26,9 +26,7 @@ def create_get_collection(
     args: argparse.Namespace,
     client: ClientAPI, collection_name: str
 ) -> None:
-    embedding_function = set_embedding_function(
-        args.embedding_llm, args.embedding_model, args.embedding_ollama_host, args.embedding_ollama_port
-    )
+    embedding_function = set_embedding_function(args)
 
     try:
         logger.debug(

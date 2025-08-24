@@ -1,11 +1,11 @@
 import logging
 import argparse
 from chromadb.api import ClientAPI
-from openai import OpenAI
-from .commands.data_fill.embedding import set_embedding_function
-from .utils import format_footnotes, print_fancy_markdown, create_openai_client
-from .models import get_best_model
-from .search_orchestrator import SearchOrchestrator
+from openai import OpenAI  # type: ignore
+from ..data_fill.embedding import set_embedding_function
+from ...utils import format_footnotes, print_fancy_markdown, create_openai_client
+from ...models import get_best_model
+from ...search_orchestrator import SearchOrchestrator
 
 logger = logging.getLogger("RAG")
 
@@ -106,6 +106,7 @@ def search(
         )
 
     if args.dry_run:
+        logger.info("Dry run completed. Skipping search execution.")
         exit(0)
 
     response = client_llm.chat.completions.create(
@@ -142,13 +143,13 @@ def process_search(
         args.llm, args.ollama_host, args.ollama_port, args.model, "chat"
     )
 
-    client_llm = create_openai_client(args=args)
+    client_llm = create_openai_client(args)
 
-    embedding_function = set_embedding_function(args=args)
+    embedding_function = set_embedding_function(args)
 
     search(
         client_llm=client_llm,
-        validated_model=validated_model,
+        model=validated_model,
         client=client,
         embedding_function=embedding_function,
         args=args,

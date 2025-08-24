@@ -1,0 +1,120 @@
+{
+  "$schema": "https://charm.land/crush.json",
+  "providers": {
+    "ollama": {
+      "name": "Ollama",
+      "base_url": "http://localhost:11434/v1/",
+      "type": "openai",
+      "models": [
+        {
+          "name": "qwen3:14b-q4_K_M-40k",
+          "id": "qwen3:14b-q4_K_M-40k",
+          "context_window": 40960,
+          "default_max_tokens": 8192,
+          "cost_per_1m_in": 0.0,
+          "cost_per_1m_in_cached": 0.0,
+          "cost_per_1m_out": 0.0,
+          "cost_per_1m_out_cached": 0.0,
+          "can_reason": false,
+          "has_reasoning_efforts": false,
+          "supports_attachments": false
+        },
+        {
+          "name": "mistral-nemo:12b-64k",
+          "id": "mistral-nemo:12b-64k",
+          "context_window": 65536,
+          "default_max_tokens": 8192,
+          "cost_per_1m_in": 0.0,
+          "cost_per_1m_in_cached": 0.0,
+          "cost_per_1m_out": 0.0,
+          "cost_per_1m_out_cached": 0.0,
+          "can_reason": false,
+          "has_reasoning_efforts": false,
+          "supports_attachments": false
+        },
+        {
+          "name": "qwen3:4b-thinking-2507-q4_K_M-64k",
+          "id": "qwen3:4b-thinking-2507-q4_K_M-64k",
+          "context_window": 65536,
+          "default_max_tokens": 8192,
+          "cost_per_1m_in": 0.0,
+          "cost_per_1m_in_cached": 0.0,
+          "cost_per_1m_out": 0.0,
+          "cost_per_1m_out_cached": 0.0,
+          "can_reason": false,
+          "has_reasoning_efforts": false,
+          "supports_attachments": false
+        },
+        {
+          "name": "gpt-oss:20b-64k",
+          "id": "gpt-oss:20b-64k",
+          "context_window": 65536,
+          "default_max_tokens": 8192,
+          "cost_per_1m_in": 0.0,
+          "cost_per_1m_in_cached": 0.0,
+          "cost_per_1m_out": 0.0,
+          "cost_per_1m_out_cached": 0.0,
+          "can_reason": false,
+          "has_reasoning_efforts": false,
+          "supports_attachments": false
+        }
+      ]
+    }
+  },
+  "lsp": {
+    "python": {
+      "command": "pyright-langserver",
+      "args": [
+        "--stdio"
+      ]
+    },
+    "go": {
+      "command": "gopls"
+    }
+  },
+  "mcp": {
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "timeout": 60,
+      "disabled": true
+    },
+    "serena": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "/Users/piotrek/git/rag"
+      ],
+      "timeout": 60,
+      "disabled": false
+    },
+    "filesystem": {
+      "disabled": true,
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "~/git/rag"
+      ]
+    },
+    "mermaid-chart": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/npx",
+      "args": [
+        "@pickstar-2002/mermaid-chart-mcp@latest"
+      ]
+    }
+  }
+}

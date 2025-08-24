@@ -14,7 +14,7 @@ logger = logging.getLogger("RAG")
 def load_documents(
     source_path: str,
     args: argparse.Namespace,
-    override_title: str = None,
+    override_title: str = "",
 ) -> List[Document]:
     # Use our validation module to check if path is a URL
     is_url = validate_url(source_path)

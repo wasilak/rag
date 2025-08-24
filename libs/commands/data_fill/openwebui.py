@@ -31,12 +31,12 @@ class OpenWebUIUploader:
             file_id = data.get("id") or data.get("file_id")
             if not file_id:
                 logger.error(f"0/2 File upload succeeded but no file ID returned: {data}")
-                return None
+                return ""
             logger.info(f"1/2 File uploaded to Open WebUI. File ID: {file_id}")
             return file_id
         except Exception as e:
             logger.error(f"0/2 Failed to upload file to Open WebUI: {e}")
-            return None
+            return ""
 
     def add_file_to_knowledge(self, file_id: str) -> bool:
         if not self.knowledge_id:

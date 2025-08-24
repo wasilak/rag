@@ -4,6 +4,7 @@ from rich.panel import Panel
 from rich.theme import Theme
 import os
 import logging
+import argparse
 from openai import OpenAI
 import tiktoken
 
@@ -82,15 +83,15 @@ def print_fancy_markdown(
         )
 
 
-def create_openai_client(llm_provider: str, ollama_host: str, ollama_port: int) -> OpenAI:
+def create_openai_client(args: argparse.Namespace) -> OpenAI:
     """Creates an OpenAI-compatible client based on the LLM provider."""
-    if llm_provider == "ollama":
+    if args.provider == "ollama":
         logger.debug("Using Ollama as LLM")
         return OpenAI(
-            base_url=f"http://{ollama_host}:{ollama_port}/v1",
+            base_url=f"http://{args.ollama_host}:{args.ollama_port}/v1",
             api_key="ollama",  # required, but unused
         )
-    elif llm_provider == "gemini":
+    elif args.provider == "gemini":
         logger.debug("Using Gemini as LLM")
         return OpenAI(
             api_key=os.getenv("GEMINI_API_KEY"),

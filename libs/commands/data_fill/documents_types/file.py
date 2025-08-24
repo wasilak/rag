@@ -13,7 +13,7 @@ from .markdown import prepare_markdown_documents
 logger = logging.getLogger("RAG")
 
 
-def load_file_documents(source_path: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = None) -> List[Document]:
+def load_file_documents(source_path: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = "") -> List[Document]:
     try:
         full_path = os.path.abspath(source_path)
     except Exception as e:
@@ -31,7 +31,7 @@ def load_file_documents(source_path: str, args: argparse.Namespace, should_conve
         return []
 
 
-def load_file_document(file_path: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = None) -> List[Document]:
+def load_file_document(file_path: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = "") -> List[Document]:
     try:
         is_epub = validate_is_epub(file_path)
     except Exception as e:
@@ -51,13 +51,13 @@ def load_file_document(file_path: str, args: argparse.Namespace, should_convert_
     elif is_pdf:
         documents = prepare_pdf_documents(file_path, args=args, override_title=override_title)
     else:
-        documents = prepare_markdown_documents(file_path, args=argparse.Namespace, should_convert_to_markdown=should_convert_to_markdown, override_title=override_title)
+        documents = prepare_markdown_documents(file_path, args=args, should_convert_to_markdown=should_convert_to_markdown, override_title=override_title)
 
     logger.debug(f"Loaded {len(documents)} documents from {file_path}")
     return documents
 
 
-def load_directory_documents(directory: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = None) -> List[Document]:
+def load_directory_documents(directory: str, args: argparse.Namespace, should_convert_to_markdown: bool = False, override_title: str = "") -> List[Document]:
     logger.debug(f"Processing directory {directory} recursively")
     documents = []
     try:

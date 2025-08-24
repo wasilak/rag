@@ -4,7 +4,7 @@ import colorlog
 from dotenv import load_dotenv
 from libs.args import parse_arguments
 from libs.commands.data_fill.data import process_data_fill
-from libs.search import process_search
+from libs.commands.search.search import process_search
 from libs.chat import process_chat
 from libs.web import process_web
 from libs.list_models import process_list_models

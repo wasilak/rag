@@ -30,9 +30,9 @@ class StoredChat:
 
 
 class ChatStorage:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str | None):
         """Initialize chat storage with SQLite database path"""
-        self.db_path = Path(db_path)
+        self.db_path = Path(db_path) if db_path else ""
         self._initialize_db()
 
     def _initialize_db(self):
@@ -221,13 +221,13 @@ class ChatStorage:
         try:
             # Clear existing messages
             self.clear_messages(chat_id)
-            
+
             # Add the summary as a single assistant message
             self.add_message(chat_id, "assistant", summary)
-            
+
             # Update the summary field
             self.update_summary(chat_id, summary)
-            
+
             return True
         except Exception as e:
             logger.error(f"Error replacing messages with summary: {e}")

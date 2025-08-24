@@ -9,7 +9,7 @@ from typing import List
 logger = logging.getLogger("RAG")
 
 
-def prepare_pdf_documents(file_path: str, args: argparse.Namespace, override_title: str = None) -> List[Document]:
+def prepare_pdf_documents(file_path: str, args: argparse.Namespace, override_title: str = "") -> List[Document]:
     try:
         reader = PdfReader(file_path)
         if reader is None:
@@ -34,8 +34,10 @@ def prepare_pdf_documents(file_path: str, args: argparse.Namespace, override_tit
         # Create a single Document object with the raw text
         doc = Document(page_content=raw_text, metadata={})
 
+        pdf_metadata = {}
         # Extract metadata from PDF file
-        pdf_metadata = {key[1:]: value for key, value in reader.metadata.items() if key.startswith('/')}
+        if reader.metadata:
+            pdf_metadata = {key[1:]: value for key, value in reader.metadata.items() if key.startswith('/')}
 
         # normalize values as strings
         pdf_metadata = {key: str(value) for key, value in pdf_metadata.items()}

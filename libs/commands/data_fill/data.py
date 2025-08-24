@@ -28,7 +28,7 @@ def process_data_fill(
     collection = None
     if client is not None and args.cleanup:
         delete_collection(client, args.collection)
-        collection = create_get_collection(client, args.collection)
+        collection = create_get_collection(args, client, args.collection)
 
     # Set up OpenWebUIUploader if needed
     openwebui_uploader = None
@@ -53,12 +53,13 @@ def process_data_fill(
 
 def process_source_path(
         source_path: str,
-        collection: Collection,
+        collection: Collection | None,
         args: argparse.Namespace,
         documents: List[Document],
-        openwebui_uploader: OpenWebUIUploader,
-        override_title: str = None
+        openwebui_uploader: OpenWebUIUploader | None,
+        override_title: str = ""
 ) -> None:
+    fabric_installed = False
 
     if args.extract_wisdom:
         fabric_installed = check_fabric_installed(args.fabric_command)
@@ -135,7 +136,7 @@ def process_source_path(
 
             insert_into_collection(
                 collection=collection,
-                documents=documents,
+                raw_documents=documents,
                 args=args,
             )
 
