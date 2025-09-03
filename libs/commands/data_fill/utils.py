@@ -253,7 +253,11 @@ def extract_keywords_with_keybert(text: str, top_n: int = 5) -> list:
     """Extract top_n keywords/phrases from text using KeyBERT, deduplicated and space-free."""
     model = KeyBERT()
     keywords = model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=top_n)
-    tags = [kw[0][0].replace(' ', '_') for kw in keywords]
+    # KeyBERT returns list of tuples where first element is the keyword
+    tags = []
+    for kw in keywords:
+        if isinstance(kw[0], str):
+            tags.append(kw[0].replace(' ', '_'))
     seen = set()
     deduped_tags = []
     for tag in tags:
