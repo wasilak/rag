@@ -8,11 +8,11 @@ from textual.widgets import Header, Footer, Static, Button, Label, TextArea
 from textual import work
 from textual.binding import Binding
 from openai import OpenAI
-from .commands.data_fill.embedding import set_embedding_function
-from .utils import format_footnotes, create_openai_client, get_tokenizer_for_model
-from .models import get_best_model
+from libs.commands.data_fill.embedding import set_embedding_function
+from libs.utils import format_footnotes, create_openai_client, get_tokenizer_for_model
+from libs.models import get_best_model
 from chromadb.api import ClientAPI
-from .chat_storage import ChatStorage, StoredChat
+from libs.chat_storage import ChatStorage, StoredChat
 
 logger = logging.getLogger("RAG")
 

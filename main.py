@@ -1,55 +1,30 @@
 import chromadb
 import logging
-import colorlog
 from dotenv import load_dotenv
 from libs.args import parse_arguments
 from libs.commands.data_fill.data import process_data_fill
 from libs.commands.search.search import process_search
-from libs.chat import process_chat
-from libs.web import process_web
+from libs.commands.chat.chat import process_chat
+from libs.commands.web.web import process_web
 from libs.list_models import process_list_models
 from libs.cache import pre_cache_llm_models, CacheRequirements
 from chromadb.config import Settings
+from libs.utils import setup_colored_logging, validate_client_and_exit
 
 logger = logging.getLogger("RAG")
 
 
 def main():
+    # Parse command line arguments
     args = parse_arguments()
+
     # Determine if Chroma should be used for data-fill
     insert_into_chroma = True
     if getattr(args, "subparser", None) == "data-fill":
         insert_into_chroma = getattr(args, "insert_into_chroma", True)
 
     # Set up colored logging
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(
-        colorlog.ColoredFormatter(
-            "%(log_color)s%(levelname)s:%(name)s:%(message)s",
-            log_colors={
-                "DEBUG": "cyan",
-                "INFO": "green",
-                "WARNING": "yellow",
-                "ERROR": "red",
-                "CRITICAL": "red,bg_white",
-            },
-        )
-    )
-    root_logger = logging.getLogger()
-    root_logger.addHandler(handler)
-    root_logger.setLevel(args.log_level)
-
-    # Suppress noisy HTTP and library logs
-    for noisy_logger in [
-        "httpx",
-        "urllib3",
-        "chromadb",
-        "openai",
-        "httpcore",
-        "boto3",
-        "botocore",
-    ]:
-        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+    setup_colored_logging(args.log_level)
 
     # Handle list-models command (doesn't need ChromaDB client)
     if args.subparser == "list-models":
@@ -79,6 +54,7 @@ def main():
             args=args,
         )
 
+        # Initialize ChromaDB client - use persistent client if path provided, otherwise HTTP client
         if len(args.chromadb_path) > 0:
             client = chromadb.PersistentClient(
                 path=args.chromadb_path, settings=chroma_settings
@@ -89,30 +65,33 @@ def main():
                 host=args.chromadb_host, port=args.chromadb_port, settings=chroma_settings
             )
 
+    # Route to appropriate command handler based on subparser
     if args.subparser == "data-fill":
-
         process_data_fill(client=client, args=args)
 
     elif args.subparser == "search":
-        if client is None:
-            logger.error("ChromaDB client is not initialized. Cannot perform search.")
+        # Validate that we have a ChromaDB client before proceeding
+        if not validate_client_and_exit(client, "perform search", logger):
             return
-
+        assert client is not None  # Type hint for pyright
         process_search(client=client, args=args)
 
     elif args.subparser == "chat":
-        if client is None:
-            logger.error("ChromaDB client is not initialized. Cannot start chat.")
+        # Validate that we have a ChromaDB client before proceeding
+        if not validate_client_and_exit(client, "start chat", logger):
             return
+        assert client is not None  # Type hint for pyright
         process_chat(client=client, args=args)
 
     elif args.subparser == "web":
-        if client is None:
-            logger.error("ChromaDB client is not initialized. Cannot start web interface.")
+        # Validate that we have a ChromaDB client before proceeding
+        if not validate_client_and_exit(client, "start web interface", logger):
             return
+        assert client is not None  # Type hint for pyright
         process_web(client=client, args=args)
 
 
 if __name__ == "__main__":
+    # Load environment variables from .env file
     load_dotenv()
     main()

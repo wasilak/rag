@@ -7,6 +7,19 @@
       "type": "openai",
       "models": [
         {
+          "name": "qwen2.5-coder:7b-instruct-q6_K-32k",
+          "id": "qwen2.5-coder:7b-instruct-q6_K-32k",
+          "context_window": 32768,
+          "default_max_tokens": 4096,
+          "cost_per_1m_in": 0.0,
+          "cost_per_1m_in_cached": 0.0,
+          "cost_per_1m_out": 0.0,
+          "cost_per_1m_out_cached": 0.0,
+          "can_reason": false,
+          "has_reasoning_efforts": false,
+          "supports_attachments": false
+        },
+        {
           "name": "qwen3:14b-q4_K_M-40k",
           "id": "qwen3:14b-q4_K_M-40k",
           "context_window": 40960,
@@ -15,8 +28,8 @@
           "cost_per_1m_in_cached": 0.0,
           "cost_per_1m_out": 0.0,
           "cost_per_1m_out_cached": 0.0,
-          "can_reason": false,
-          "has_reasoning_efforts": false,
+          "can_reason": true,
+          "has_reasoning_efforts": true,
           "supports_attachments": false
         },
         {
@@ -28,21 +41,8 @@
           "cost_per_1m_in_cached": 0.0,
           "cost_per_1m_out": 0.0,
           "cost_per_1m_out_cached": 0.0,
-          "can_reason": false,
-          "has_reasoning_efforts": false,
-          "supports_attachments": false
-        },
-        {
-          "name": "qwen3:4b-thinking-2507-q4_K_M-64k",
-          "id": "qwen3:4b-thinking-2507-q4_K_M-64k",
-          "context_window": 65536,
-          "default_max_tokens": 8192,
-          "cost_per_1m_in": 0.0,
-          "cost_per_1m_in_cached": 0.0,
-          "cost_per_1m_out": 0.0,
-          "cost_per_1m_out_cached": 0.0,
-          "can_reason": false,
-          "has_reasoning_efforts": false,
+          "can_reason": true,
+          "has_reasoning_efforts": true,
           "supports_attachments": false
         },
         {
@@ -54,8 +54,21 @@
           "cost_per_1m_in_cached": 0.0,
           "cost_per_1m_out": 0.0,
           "cost_per_1m_out_cached": 0.0,
-          "can_reason": false,
-          "has_reasoning_efforts": false,
+          "can_reason": true,
+          "has_reasoning_efforts": true,
+          "supports_attachments": false
+        },
+        {
+          "name": "gpt-oss:20b-80k",
+          "id": "gpt-oss:20b-80k",
+          "context_window": 81920,
+          "default_max_tokens": 8192,
+          "cost_per_1m_in": 0.0,
+          "cost_per_1m_in_cached": 0.0,
+          "cost_per_1m_out": 0.0,
+          "cost_per_1m_out_cached": 0.0,
+          "can_reason": true,
+          "has_reasoning_efforts": true,
           "supports_attachments": false
         }
       ]
@@ -75,17 +88,17 @@
   "mcp": {
     "sequential-thinking": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/npx",
+      "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ],
       "timeout": 60,
-      "disabled": true
+      "disabled": false
     },
     "serena": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/uvx",
+      "command": "uvx",
       "args": [
         "--from",
         "git+https://github.com/oraios/serena",
@@ -94,7 +107,7 @@
         "--context",
         "ide-assistant",
         "--project",
-        "/Users/piotrek/git/rag"
+        "~/git/rag"
       ],
       "timeout": 60,
       "disabled": false
@@ -102,7 +115,7 @@
     "filesystem": {
       "disabled": true,
       "type": "stdio",
-      "command": "/opt/homebrew/bin/npx",
+      "command": "npx",
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
@@ -111,9 +124,44 @@
     },
     "mermaid-chart": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/npx",
+      "command": "npx",
       "args": [
+        "-y",
         "@pickstar-2002/mermaid-chart-mcp@latest"
+      ]
+    },
+    "augments": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/augmnt/augments-mcp-server",
+        "uv",
+        "run",
+        "augments-mcp-server"
+      ]
+    },
+    "package-registry": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "package-registry-mcp"
+      ]
+    },
+    "claude-code": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "mcp-claude-code",
+        "claudecode",
+        "--transport",
+        "stdio",
+        "--allow-path",
+        "~/git",
+        "--project",
+        "~/git/rag"
       ]
     }
   }

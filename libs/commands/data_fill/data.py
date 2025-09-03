@@ -84,18 +84,37 @@ def process_source_path(
 
             logger.info("Uploading documents to Open WebUI")
 
-            file_content = doc.page_content.encode("utf-8")
+            # Add YAML frontmatter and format content
+            content_with_metadata = "---\n"
+            content_with_metadata += f"title: {doc.metadata.get('title', '')}\n"
+            content_with_metadata += f"source: {source_path}\n"
+            content_with_metadata += "---\n\n"
+            content_with_metadata += doc.page_content
+
+            # Debug logging before encoding
+            logger.debug(f"Preparing to upload file: {doc.metadata['title']}")
+            logger.debug("Content preview before encoding:")
+            logger.debug(content_with_metadata[:500] + "..." if len(content_with_metadata) > 500 else content_with_metadata)
+
+            file_content = content_with_metadata.encode("utf-8")
+            content_size = len(file_content)
+            logger.debug(f"Content size after encoding: {content_size} bytes")
+            logger.debug(f"Metadata: {doc.metadata}")
+
             file_obj = io.BytesIO(file_content)
             file_obj.name = doc.metadata["sanitized_title"]  # requests uses this for the filename
 
             try:
-                file_id = openwebui_uploader.upload_and_add(file_obj, filename=doc.metadata["title"])
+                file_id = openwebui_uploader.upload_and_add(
+                    file_obj,
+                    filename=doc.metadata["title"]
+                )
                 if file_id:
-                    logger.info(f"Uploaded {doc.metadata["title"]} to Open WebUI (file_id={file_id})")
+                    logger.info(f'Uploaded {doc.metadata["title"]} to Open WebUI (file_id={file_id})')
                 else:
-                    logger.warning(f"Failed to upload {doc.metadata["title"]} to Open WebUI")
+                    logger.warning(f'Failed to upload {doc.metadata["title"]} to Open WebUI')
             except Exception as e:
-                logger.error(f"Failed to upload {doc.metadata["title"]} to Open WebUI: {e}")
+                logger.error(f'Failed to upload {doc.metadata["title"]} to Open WebUI: {e}')
 
         # S3 upload logic (if enabled and Chroma is skipped)
         if args.upload_to_s3:
@@ -114,7 +133,7 @@ def process_source_path(
             file_path = (
                 doc.metadata["sanitized_title"] + ".md"
                 if not args.bucket_path
-                else f"{args.bucket_path}/{doc.metadata["sanitized_title"]}.md"
+                else f'{args.bucket_path}/{doc.metadata["sanitized_title"]}.md'
             )
 
             doc.metadata["file_path"] = file_path

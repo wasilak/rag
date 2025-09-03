@@ -7,8 +7,14 @@ import logging
 import argparse
 from openai import OpenAI
 import tiktoken
+import colorlog
 
 logger = logging.getLogger("RAG")
+
+
+def get_rag_logger(name: str = "RAG") -> logging.Logger:
+    """Get a standardized logger for the RAG application"""
+    return logging.getLogger(name)
 
 
 def format_footnotes(metadatas: list[dict]) -> str:
@@ -114,3 +120,58 @@ def get_tokenizer_for_model(model_name: str):
     except Exception:
         logger.warning(f"Could not get specific tokenizer for model '{model_name}'. Falling back to GPT-4 tokenizer.")
         return tiktoken.encoding_for_model("gpt-4")
+
+
+def validate_client_and_exit(client, action: str, logger: logging.Logger) -> bool:
+    """Validate ChromaDB client and exit with error if None
+
+    Args:
+        client: ChromaDB client to validate
+        action: Description of the action that requires the client
+        logger: Logger instance for error messages
+
+    Returns:
+        True if client is valid, False if client is None (and error logged)
+    """
+    if client is None:
+        logger.error(f"ChromaDB client is not initialized. Cannot {action}.")
+        return False
+    return True
+
+
+def setup_colored_logging(log_level) -> None:
+    """Set up colored logging for the RAG application
+
+    Args:
+        log_level: Logging level to use
+    """
+
+    # Set up colored logging
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(
+        colorlog.ColoredFormatter(
+            "%(log_color)s%(levelname)s:%(name)s:%(message)s",
+            log_colors={
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
+        )
+    )
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(log_level)
+
+    # Suppress noisy HTTP and library logs
+    for noisy_logger in [
+        "httpx",
+        "urllib3",
+        "chromadb",
+        "openai",
+        "httpcore",
+        "boto3",
+        "botocore",
+    ]:
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)

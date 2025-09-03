@@ -1,0 +1,26 @@
+# FROM gpt-oss:20b
+FROM mistral-nemo:12b
+
+# 64k
+PARAMETER num_ctx 65536
+
+# temperature: Controls the creativity and randomness of the output. For coding tasks, a lower temperature (e.g., 0.2 to 0.4) is often preferred because it makes the model's output more deterministic and factual. This can lead to faster and more reliable results for bug fixes and code generation.
+PARAMETER temperature 0.4
+
+# repeat_penalty: This penalizes the model for repeating tokens, which can be useful for avoiding loops in generated text or code. The default is typically 1.1. You can increase it slightly (e.g., to 1.2) to discourage repetition.
+PARAMETER repeat_penalty 1.2
+
+
+# num_predict / default_max_tokens: As we've discussed, setting a reasonable default_max_tokens (like 8192 for coding) will make the model stop generating sooner, leading to a faster perceived response time.
+PARAMETER num_predict 8192
+
+# top_k and top_p: These parameters are used for sampling and token selection. They work together with temperature to control the diversity of the output. For coding, you can often keep these at their default values (top_k 40, top_p 0.9) or experiment with slightly lower values to get more focused, conservative responses.
+
+# TEMPLATE """{{ .Prompt }}
+# {{- if .System }}
+# {{ .System }}
+# {{- end }}
+# {{- if .ToolCalls }}
+# Available tools: {{ .ToolCalls }}
+# {{- end }}
+# """

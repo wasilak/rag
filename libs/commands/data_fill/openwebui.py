@@ -23,7 +23,8 @@ class OpenWebUIUploader:
             "Accept": "application/json",
         }
         try:
-            files = {"file": (filename, file)}
+            # Create a tuple of (filename, file object, content_type)
+            files = {"file": (filename, file, "text/markdown")}
             logger.info(f"Uploading file to Open WebUI: {filename}")
             response = requests.post(url, headers=headers, files=files, timeout=self.timeout, verify=False)
             response.raise_for_status()
@@ -35,7 +36,7 @@ class OpenWebUIUploader:
             logger.info(f"1/2 File uploaded to Open WebUI. File ID: {file_id}")
             return file_id
         except Exception as e:
-            logger.error(f"0/2 Failed to upload file to Open WebUI: {e}")
+            logger.error(f"0/2 Failed to upload file to Open WebUI: {e}, error: {response.text}")
             return ""
 
     def add_file_to_knowledge(self, file_id: str) -> bool:
@@ -52,11 +53,20 @@ class OpenWebUIUploader:
         try:
             logger.info(f"Adding file {file_id} to knowledge collection {self.knowledge_id}")
             response = requests.post(url, headers=headers, json=data, timeout=self.timeout, verify=False)
+
+            # Check for duplicate content before raising other status errors
+            if response.status_code == 400 and "Duplicate content detected" in response.text:
+                logger.warning(f"2/2 File {file_id} already exists in knowledge collection (duplicate content)")
+                return True  # Return True since this is not a failure case
+
             response.raise_for_status()
             logger.info(f"2/2 File {file_id} added to knowledge collection {self.knowledge_id}")
             return True
         except Exception as e:
-            logger.error(f"2/2 Failed to add file to knowledge collection: {e}")
+            if isinstance(e, requests.exceptions.HTTPError):
+                logger.error(f"2/2 Failed to add file to knowledge collection: {e}, error: {e.response.text}")
+            else:
+                logger.error(f"2/2 Failed to add file to knowledge collection: {str(e)}")
             return False
 
     def upload_and_add(self, file, filename: str) -> str:

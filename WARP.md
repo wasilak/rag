@@ -75,7 +75,7 @@ docker run -it --rm -p 8080:8080 rag web --host 0.0.0.0
 **RAG Core**:
 - `libs/rag_orchestrator.py` - Advanced iterative search with self-improving queries
 - `libs/search_orchestrator.py` - Search coordination and result formatting
-- `libs/search.py` - Basic search implementation
+- `libs/commands/search/search.py` - Basic search implementation
 
 **LLM Integration**:
 - `libs/models.py` - Model validation, defaults, and provider management
@@ -153,7 +153,7 @@ The system includes intelligent model validation (`libs/models.py`) that:
 4. Update CLI choices in `libs/args.py`
 
 ### Modifying Search Behavior
-- Basic search: `libs/search.py`
+- Basic search: `libs/commands/search/search.py`
 - Advanced iterative search: `libs/rag_orchestrator.py`
 - Result formatting: `libs/utils.py` `format_footnotes()`
 

@@ -9,10 +9,10 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from engineio.payload import Payload
 from chromadb.api import ClientAPI
-from .commands.data_fill.embedding import set_embedding_function
-from .utils import format_footnotes, create_openai_client, get_tokenizer_for_model
-from .models import get_best_model
-from .chat_storage import ChatStorage
+from libs.commands.data_fill.embedding import set_embedding_function
+from libs.utils import format_footnotes, create_openai_client, get_tokenizer_for_model
+from libs.models import get_best_model
+from libs.chat_storage import ChatStorage
 
 logger = logging.getLogger("RAG")
 
