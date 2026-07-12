@@ -20,7 +20,7 @@
     "@types/node": "~24",
     "@types/react": "~19",
     "@types/react-dom": "~19",
-    "framer-motion": "^12.23.12",
+    "motion": "^12.23.12",
     "react": "~19",
     "react-dom": "~19",
     "react-markdown": "~10",
