@@ -5620,12 +5620,12 @@ fraction.js@^4.3.7:
   resolved "https://registry.yarnpkg.com/fraction.js/-/fraction.js-4.3.7.tgz#06ca0085157e42fda7f9e726e79fefc4068840f7"
   integrity sha512-ZsDfxO51wGAXREY55a7la9LScWpwv9RxIrYABrlvOFBlH/ShPnrtsXeuUIfXKKOVicNxQ+o8JTbJvjS4M89yew==
 
-framer-motion@14.2.0:
-  version "14.2.0"
-  resolved "https://registry.yarnpkg.com/framer-motion/-/framer-motion-14.2.0.tgz#914ed5a13c74a962c2efaba3b8c9f4dbf6e1d1c7"
-  integrity sha512-cD2gfFujHt4r/+dZpcn5yziu7VRwQAQDakwIm/bICYXbafnpHCYokV+PnEXqErnSdv6Eh28a+SRF+f3ndGcMsQ==
+framer-motion@14.3.0:
+  version "14.3.0"
+  resolved "https://registry.yarnpkg.com/framer-motion/-/framer-motion-14.3.0.tgz#acb331971ebe747cc44ded35a9c5c41bb9b3c89e"
+  integrity sha512-d8WCrU0ZQn7ukKMykCsDyIOwb/taZeDqqrDBK0du5GO0AO/ynz8fdR/LIIz9Pyy3n3tGwrneR+n0egyrrLa3fw==
   dependencies:
-    motion-dom "14.2.0"
+    motion-dom "14.3.0"
     motion-utils "14.1.1"
     tslib "^2.4.0"
 
@@ -8056,10 +8056,10 @@ mkdirp@~0.5.1:
   dependencies:
     minimist "^1.2.6"
 
-motion-dom@14.2.0:
-  version "14.2.0"
-  resolved "https://registry.yarnpkg.com/motion-dom/-/motion-dom-14.2.0.tgz#d9c02f0c1347a46b62b822bdf0de0e0c2fb2c275"
-  integrity sha512-TDdxnjAavh2Qm4lQCQI3uoTx9IR/Id2PI8JNEXW3AcwwV2yvhoimAX3/TnE+x82gDHfPq2yx/cJ58TTw5mMr0A==
+motion-dom@14.3.0:
+  version "14.3.0"
+  resolved "https://registry.yarnpkg.com/motion-dom/-/motion-dom-14.3.0.tgz#8c3d8fe2b9b3bb305def1be1a2e0a10be55d18fb"
+  integrity sha512-rcKO4aEJzAqDEsrH6qFzhLZxs7bNqZpiUEuEATz9LaRwt6dG7hZEbcFUSHNR8NECaKYM0Iuw6Iv6NpWEGXDI+w==
   dependencies:
     motion-utils "14.1.1"
 
@@ -8069,11 +8069,11 @@ motion-utils@14.1.1:
   integrity sha512-3VvN5Uvf8B6qG+OfOui6Nht5EWp+vLuU3IqcAj7ItZGKqtmTjCebl5sGZF7/08gEHRnEl1AP/fIwbcEyVrcQGQ==
 
 motion@^14.0.0:
-  version "14.2.0"
-  resolved "https://registry.yarnpkg.com/motion/-/motion-14.2.0.tgz#1e1a16a0035806461e6773e0bed9f7f6983d90a6"
-  integrity sha512-45cDwjZh0yOMZtnX3hIFPIPmzCWz/RC2bD/niWVIssGBjJlMmosbDILG9a+ZyoP635Z5xrbKvuo10spv9dBdnw==
+  version "14.3.0"
+  resolved "https://registry.yarnpkg.com/motion/-/motion-14.3.0.tgz#76c2395ab25e935e60fe7944b99b5a18035c89f6"
+  integrity sha512-yh/nHYjikl68+FTxAMywFYzzj21/oGY7RGCfkqN5zpuT1rk3rp0lKfVU8EUq0A64qQeGnxuKUJWP85MipqdLBw==
   dependencies:
-    framer-motion "14.2.0"
+    framer-motion "14.3.0"
     tslib "^2.4.0"
 
 ms@2.0.0:
