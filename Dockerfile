@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.28
 # Multi-stage build for better performance and smaller final image
-FROM node:24-alpine AS web-builder
+FROM node:26-alpine AS web-builder
 
 # Install dependencies for native modules
 RUN apk add --no-cache python3 make g++
